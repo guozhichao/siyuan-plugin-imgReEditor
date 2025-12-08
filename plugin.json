@@ -1,0 +1,32 @@
+{
+  "name": "siyuan-plugin-image-editor",
+  "author": "Achuan-2",
+  "url": "https://github.com/Achuan-2/siyuan-plugin-image-editor",
+  "version": "0.0.1",
+  "minAppVersion": "3.0.12",
+  "backends": [
+    "all"
+  ],
+  "frontends": [
+    "all"
+  ],
+  "disabledInPublish": true,
+  "displayName": {
+    "default": "Plugin Template",
+    "zh_CN": "插件模板"
+  },
+  "description": {
+    "default": "",
+    "zh_CN": ""
+  },
+  "readme": {
+    "default": "README.md",
+    "zh_CN": "README_zh_CN.md"
+  },
+  "funding": {
+    "custom": [
+      "https://fastly.jsdelivr.net/gh/Achuan-2/PicBed/assets/20241128221208-2024-11-28.png"
+    ]
+  },
+  "keywords": []
+}
