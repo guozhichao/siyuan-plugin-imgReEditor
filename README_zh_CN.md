@@ -1,7 +1,29 @@
 
+
+
+
+
 ## 📝更新日志
 
 见[CHANGELOG.md](https://cdn.jsdelivr.net/gh/Achuan-2/siyuan-plugin-copilot@main/CHANGELOG.md)
+
+
+## 功能介绍
+
+在思源笔记中编辑图片，支持裁剪、旋转，添加形状、文字等功能，最大亮点是已编辑的图片支持二次编辑
+
+- 支持裁剪、添加文字、添加矩形等功能
+- 保存png图片支持二次编辑之前的标记
+
+![](https://fastly.jsdelivr.net/gh/Achuan-2/PicBed/assets/20251209155326-2025-12-09.png)
+
+
+## 设置
+
+- 编辑数据存储方式
+  - 直接存储在当前图片里：- 图片永久存储编辑历史，不怕编辑历史丢失，图片发送给别人也能保留编辑数据，缺点是图片体积会变大
+  - 存储在backup文件夹：减少图片体积，当不需要存储编辑数据再编辑图片时，可以把backup里的json文件直接删除
+
 
 
 ## 📄 许可证
