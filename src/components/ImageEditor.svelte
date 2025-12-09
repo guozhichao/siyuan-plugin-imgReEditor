@@ -426,7 +426,7 @@
         updateZoom(1.0);
     }
 
-    function enterCropMode() {
+    function enterCropMode(forceDraw = false) {
         if (!imageEditor) return;
         const canvas = getCanvasSafe();
         if (!canvas) return;
@@ -499,9 +499,10 @@
         });
         
         // If image has been cropped before, show the previous crop rectangle
-        if (cropData) {
+        if (cropData && !forceDraw) {
             // Create crop rectangle with previous crop area
             cropRect = new (window as any).fabric.Rect({
+                type: 'custom-crop-rect', // Avoid TUI shape detection
                 left: cropData.left,
                 top: cropData.top,
                 width: cropData.width,
@@ -543,6 +544,7 @@
             
             // Create initial crop rectangle
             cropRect = new (window as any).fabric.Rect({
+                type: 'custom-crop-rect', // Avoid TUI shape detection
                 left: startX,
                 top: startY,
                 width: 0,
@@ -663,16 +665,13 @@
             }
         });
         
-        if (!cropRect) {
-            cropMode = false;
-            return;
-        }
-        
-        if (apply) {
+        if (apply && cropRect) {
             applyCrop();
         } else {
-            // Remove the crop rectangle
-            canvas.remove(cropRect);
+            if (cropRect) {
+                // Remove the crop rectangle
+                canvas.remove(cropRect);
+            }
             
             // If we were in a cropped state before (and didn't apply a new one), 
             // we need to restore the PREVIOUS crop view (re-crop effectively)
@@ -901,12 +900,12 @@
                             cropRect = null;
                             
                             // Re-enable drawing mode
-                            enterCropMode();
+                            enterCropMode(true);
                             pushMsg('裁剪框已删除，请重新绘制');
                         }
                     }
                 }
-            });
+            }, true); // Use capture to ensure we handle keys before TUI
             
             // Add reset zoom button to the top toolbar
             const helpMenu = editorEl.querySelector('.tui-image-editor-help-menu.top');
