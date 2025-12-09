@@ -313,6 +313,53 @@
         return new Blob([u8arr], { type: mime });
     }
 
+    function updateZoom(zoom: number) {
+        const canvas = getCanvasSafe();
+        if (!canvas) return;
+        
+        // Set the new zoom level
+        canvas.setZoom(zoom);
+        
+        // Update canvas dimensions to match zoom
+        const canvasWidth = canvas.getWidth();
+        const canvasHeight = canvas.getHeight();
+            
+        // Set the viewport transform to ensure proper rendering
+        canvas.setViewportTransform([zoom, 0, 0, zoom, 0, 0]);
+        
+        // Update canvas wrapper size to accommodate zoomed content
+        const canvasContainer = editorEl.querySelector('.lower-canvas')?.parentElement;
+        if (canvasContainer) {
+            const canvasWrapper = canvasContainer.querySelector('.canvas-container') as HTMLElement;
+            if (canvasWrapper) {
+                canvasWrapper.style.width = `${canvasWidth * zoom}px`;
+                canvasWrapper.style.height = `${canvasHeight * zoom}px`;
+            }
+        }
+        
+        // Add zoom indicator
+        let zoomIndicator = editorEl.querySelector('.zoom-indicator') as HTMLElement;
+        if (!zoomIndicator) {
+            zoomIndicator = document.createElement('div');
+            zoomIndicator.className = 'zoom-indicator';
+            editorEl.appendChild(zoomIndicator);
+        }
+        zoomIndicator.textContent = `${Math.round(zoom * 100)}%`;
+        zoomIndicator.style.display = 'block';
+        
+        // Hide indicator after 1.5 seconds
+        clearTimeout((zoomIndicator as any)._hideTimer);
+        (zoomIndicator as any)._hideTimer = setTimeout(() => {
+            zoomIndicator.style.display = 'none';
+        }, 1500);
+        
+        canvas.renderAll();
+    }
+
+    function resetZoom() {
+        updateZoom(1.0);
+    }
+
     function setupToolbarToggle() {
         if (!imageEditor || !imageEditor.ui) return;
         
@@ -363,9 +410,41 @@
                 }
             });
             
+            // Add reset zoom button to the top toolbar
+            const helpMenu = editorEl.querySelector('.tui-image-editor-help-menu.top');
+            const zoomInBtn = editorEl.querySelector('.tie-btn-zoomIn');
+            if (helpMenu && zoomInBtn) {
+                // Create reset zoom button
+                const resetZoomBtn = document.createElement('li');
+                resetZoomBtn.className = 'tie-btn-zoom-reset tui-image-editor-item help enabled';
+                resetZoomBtn.setAttribute('tooltip-content', 'Reset Zoom');
+                resetZoomBtn.innerHTML = `
+                    <svg class="svg_ic-menu" style="width: 24px; height: 24px;">
+                        <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" 
+                              font-size="12" font-weight="bold" fill="#808080">
+                            1:1
+                        </text>
+                    </svg>
+                `;
+                resetZoomBtn.style.cursor = 'pointer';
+                
+                // Add click handler
+                resetZoomBtn.addEventListener('click', () => {
+                    resetZoom();
+                });
+                
+                // Insert after zoom-in button
+                zoomInBtn.parentNode?.insertBefore(resetZoomBtn, zoomInBtn.nextSibling);
+            }
+
+            
             // Add mouse wheel zoom functionality
             const canvasContainer = editorEl.querySelector('.lower-canvas')?.parentElement;
             if (canvasContainer) {
+                // Enable scrolling for zoomed canvas
+                canvasContainer.style.overflow = 'auto';
+                canvasContainer.style.position = 'relative';
+                
                 canvasContainer.addEventListener('wheel', (e: WheelEvent) => {
                     e.preventDefault();
                     
@@ -379,12 +458,7 @@
                     const delta = e.deltaY > 0 ? -0.1 : 0.1;
                     zoom = Math.min(Math.max(0.1, zoom + delta), 5); // Limit zoom between 0.1x and 5x
                     
-                    // Get mouse position relative to canvas
-                    const point = new (window as any).fabric.Point(e.offsetX, e.offsetY);
-                    
-                    // Zoom to point
-                    canvas.zoomToPoint(point, zoom);
-                    canvas.renderAll();
+                    updateZoom(zoom);
                 }, { passive: false });
             }
         }, 300);
@@ -417,7 +491,6 @@
         <button class="btn btn-primary" on:click={handleSave} disabled={!editorReady || saving}>
             {saving ? '保存中...' : '保存'}
         </button>
-
     </div>
 </div>
 
@@ -478,5 +551,38 @@
     }
     :global(.tui-image-editor-header-logo){
         display: none !important;
+    }
+    
+    /* Reset zoom button styles */
+    :global(.tie-btn-zoom-reset) {
+        transition: background-color 0.2s ease;
+    }
+    
+    :global(.tie-btn-zoom-reset:hover) {
+        background-color: rgba(0, 0, 0, 0.05) !important;
+    }
+    
+    :global(.tie-btn-zoom-reset svg text) {
+        user-select: none;
+    }
+    
+    /* Zoom indicator styles */
+    :global(.zoom-indicator) {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background: rgba(0, 0, 0, 0.75);
+        color: white;
+        padding: 8px 16px;
+        border-radius: 4px;
+        font-size: 14px;
+        font-weight: bold;
+        z-index: 2000;
+        pointer-events: none;
+        transition: opacity 0.3s ease;
+    }
+    
+    :global(.zoom-indicator[style*="display: none"]) {
+        opacity: 0;
     }
 </style>
