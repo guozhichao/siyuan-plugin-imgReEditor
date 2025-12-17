@@ -283,7 +283,27 @@
         saving = true;
         try {
             const canvas = getCanvasSafe();
+
+            // If there is an active or unconfirmed crop rectangle, apply it before saving
+            // This ensures the crop rectangle itself is not saved as a canvas object
+            if (cropRect) {
+                try {
+                    if (cropMode) {
+                        // exitCropMode(true) will apply the crop and clean up handlers/rect
+                        exitCropMode(true);
+                    } else {
+                        // If somehow not in cropMode but rect remains, apply directly
+                        applyCrop();
+                    }
+                    // Give Fabric a moment to finish layout/rendering before export
+                    await new Promise(resolve => setTimeout(resolve, 50));
+                } catch (e) {
+                    console.warn('Failed to apply pending crop before save', e);
+                }
+            }
+
             const canvasJSON = canvas?.toJSON?.() ?? null;
+
             // export image as PNG dataurl
             const dataURL =
                 typeof imageEditor.toDataURL === 'function' ? await imageEditor.toDataURL() : null;
