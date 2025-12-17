@@ -42,6 +42,7 @@ pnpm run dev
 ## 🙏 致谢
 
 - 基于 [plugin-sample-vite-svelte](https://github.com/siyuan-note/plugin-sample-vite-svelte/) 模板开发
+- 基于[tui-image-editor](https://github.com/nhn/tui.image-editor)
 
 ## ❤️用爱发电
 
