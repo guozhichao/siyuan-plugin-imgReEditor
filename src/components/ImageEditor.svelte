@@ -398,7 +398,7 @@
             const t = e.detail.tool;
             activeTool = t;
             // show popup for tools that have a submenu
-            const hasSubmenu = ['shape', 'arrow', 'brush', 'text'].includes(t);
+            const hasSubmenu = ['shape', 'arrow', 'brush', 'text', 'transform'].includes(t);
             showToolPopup = hasSubmenu;
             if (canvasEditorRef && typeof canvasEditorRef.setTool === 'function') {
                 if (t === 'shape') {
@@ -425,6 +425,10 @@
                             pushErrMsg('进入裁剪模式失败');
                         } catch (e) {}
                     }
+                } else if (t === 'transform') {
+                    // open transform submenu
+                    canvasEditorRef.setTool('transform');
+                    toolSettings = canvasEditorRef.getToolOptions();
                 } else {
                     canvasEditorRef.setTool(t);
                     toolSettings = canvasEditorRef.getToolOptions();
@@ -439,6 +443,26 @@
         on:redo={() => {
             if (canvasEditorRef && typeof canvasEditorRef.redo === 'function') {
                 canvasEditorRef.redo();
+            }
+        }}
+        on:flip={e => {
+            try {
+                const dir = e.detail && e.detail.dir;
+                if (!canvasEditorRef) return;
+                if (dir === 'horizontal') canvasEditorRef.flipHorizontal && canvasEditorRef.flipHorizontal();
+                else if (dir === 'vertical') canvasEditorRef.flipVertical && canvasEditorRef.flipVertical();
+            } catch (err) {
+                console.warn('flip handler failed', err);
+            }
+        }}
+        on:rotate={e => {
+            try {
+                const dir = e.detail && e.detail.dir;
+                if (!canvasEditorRef) return;
+                if (dir === 'cw') canvasEditorRef.rotate90 && canvasEditorRef.rotate90(true);
+                else if (dir === 'ccw') canvasEditorRef.rotate90 && canvasEditorRef.rotate90(false);
+            } catch (err) {
+                console.warn('rotate handler failed', err);
             }
         }}
         on:save={() => handleSave()}
@@ -667,6 +691,22 @@
                                 canvasEditorRef.setTool(activeTool, toolSettings);
                                 canvasEditorRef.applyToolOptionsToSelection(toolSettings);
                             } catch (err) {}
+                        }}
+                        on:action={e => {
+                            try {
+                                const a = e.detail || {};
+                                if (!canvasEditorRef) return;
+                                if (a.action === 'flip') {
+                                    if (a.dir === 'horizontal') canvasEditorRef.flipHorizontal();
+                                    else if (a.dir === 'vertical') canvasEditorRef.flipVertical();
+                                } else if (a.action === 'rotate') {
+                                    if (a.dir === 'cw') canvasEditorRef.rotate90 && canvasEditorRef.rotate90(true);
+                                    else if (a.dir === 'ccw') canvasEditorRef.rotate90 && canvasEditorRef.rotate90(false);
+                                }
+                                // keep popup open so user can perform multiple transforms
+                            } catch (err) {
+                                console.warn('transform action handler failed', err);
+                            }
                         }}
                     />
                 </div>

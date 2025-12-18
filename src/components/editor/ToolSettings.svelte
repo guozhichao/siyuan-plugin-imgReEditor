@@ -201,6 +201,29 @@
                 on:input={e => emitChange({ fill: getValue(e) })}
             />
         </div>
+    {:else if tool === 'transform'}
+        <div class="row">
+            <div class="label">翻转</div>
+            <div style="display:flex;gap:8px;">
+                <button on:click={() => dispatch('action', { action: 'flip', dir: 'horizontal' })}>
+                    水平
+                </button>
+                <button on:click={() => dispatch('action', { action: 'flip', dir: 'vertical' })}>
+                    垂直
+                </button>
+            </div>
+        </div>
+        <div class="row">
+            <div class="label">旋转</div>
+            <div style="display:flex;gap:8px;">
+                <button on:click={() => dispatch('action', { action: 'rotate', dir: 'cw' })}>
+                    顺时针 90°
+                </button>
+                <button on:click={() => dispatch('action', { action: 'rotate', dir: 'ccw' })}>
+                    逆时针 90°
+                </button>
+            </div>
+        </div>
     {:else}
         <div class="empty">暂无设置</div>
     {/if}

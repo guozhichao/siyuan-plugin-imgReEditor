@@ -46,6 +46,9 @@
     <button class:active={active === 'eraser'} on:click={() => emit('tool', { tool: 'eraser' })}>
         橡皮
     </button>
+    <button class:active={active === 'transform'} on:click={() => emit('tool', { tool: 'transform' })}>
+        变换
+    </button>
     <button on:click={() => emit('undo')} disabled={!canUndo}>
         撤回{#if undoCount > 0}
             ({undoCount}){/if}
@@ -81,4 +84,5 @@
     .editor-toolbar button {
         padding: 6px 8px;
     }
+
 </style>

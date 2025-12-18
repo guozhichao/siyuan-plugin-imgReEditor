@@ -1374,6 +1374,192 @@
             console.log('fromJSON completed, canvas rendered');
         });
     }
+
+    // Image transforms: flip and rotate (exposed to host)
+    export function flipHorizontal() {
+        try {
+            if (!canvas) return;
+            const w = canvas.getWidth();
+            // Flip background if exists
+            const bg = canvas.backgroundImage as any;
+            try {
+                if (bg) {
+                    // flip horizontally around canvas center
+                    const c = bg.getCenterPoint?.() || new (fabric as any).Point((bg.left || 0) + (bg.width || 0) / 2, (bg.top || 0) + (bg.height || 0) / 2);
+                    const newCenterX = w - (c.x || 0);
+                    bg.set('flipX', !bg.flipX);
+                    bg.setPositionByOrigin && bg.setPositionByOrigin(new (fabric as any).Point(newCenterX, c.y || 0), 'center', 'center');
+                    bg.setCoords && bg.setCoords();
+                }
+            } catch (e) {}
+
+            // Flip all drawable objects
+            try {
+                const objs = canvas.getObjects ? canvas.getObjects() : [];
+                objs.forEach((o: any) => {
+                    try {
+                        if (o._isCropRect) return;
+                        const c = o.getCenterPoint();
+                        const newCenterX = w - (c.x || 0);
+                        o.setPositionByOrigin && o.setPositionByOrigin(new (fabric as any).Point(newCenterX, c.y || 0), 'center', 'center');
+                        o.set('flipX', !o.flipX);
+                        o.setCoords && o.setCoords();
+                    } catch (e) {}
+                });
+                canvas.requestRenderAll();
+                schedulePushWithType('modified');
+                try {
+                    dispatch('flipped', { dir: 'horizontal' });
+                } catch (e) {}
+            } catch (e) {}
+        } catch (e) {}
+    }
+
+    export function flipVertical() {
+        try {
+            if (!canvas) return;
+            const h = canvas.getHeight();
+            // Flip background if exists
+            const bg = canvas.backgroundImage as any;
+            try {
+                if (bg) {
+                    const c = bg.getCenterPoint?.() || new (fabric as any).Point((bg.left || 0) + (bg.width || 0) / 2, (bg.top || 0) + (bg.height || 0) / 2);
+                    const newCenterY = h - (c.y || 0);
+                    bg.set('flipY', !bg.flipY);
+                    bg.setPositionByOrigin && bg.setPositionByOrigin(new (fabric as any).Point(c.x || 0, newCenterY), 'center', 'center');
+                    bg.setCoords && bg.setCoords();
+                }
+            } catch (e) {}
+
+            // Flip all drawable objects
+            try {
+                const objs = canvas.getObjects ? canvas.getObjects() : [];
+                objs.forEach((o: any) => {
+                    try {
+                        if (o._isCropRect) return;
+                        const c = o.getCenterPoint();
+                        const newCenterY = h - (c.y || 0);
+                        o.setPositionByOrigin && o.setPositionByOrigin(new (fabric as any).Point(c.x || 0, newCenterY), 'center', 'center');
+                        o.set('flipY', !o.flipY);
+                        o.setCoords && o.setCoords();
+                    } catch (e) {}
+                });
+                canvas.requestRenderAll();
+                schedulePushWithType('modified');
+                try {
+                    dispatch('flipped', { dir: 'vertical' });
+                } catch (e) {}
+            } catch (e) {}
+        } catch (e) {}
+    }
+
+    // Rotate 90 degrees without flattening objects (keep editable objects)
+    export async function rotate90(clockwise: boolean = true) {
+        try {
+            if (!canvas) return;
+            const W = canvas.getWidth();
+            const H = canvas.getHeight();
+
+            // Prepare list of objects to transform (exclude crop rect if present)
+            const objs = (canvas.getObjects ? canvas.getObjects() : []).filter((o: any) => !o._isCropRect);
+
+            // Temporarily hide objects to export background-only image
+            const prevVisible: boolean[] = [];
+            objs.forEach((o: any) => {
+                prevVisible.push(typeof o.visible === 'undefined' ? true : o.visible);
+                o.visible = false;
+            });
+            canvas.renderAll();
+
+            const bgData = toDataURL({ format: 'png', quality: 1 });
+
+            // restore object visibility
+            objs.forEach((o: any, idx: number) => {
+                o.visible = prevVisible[idx];
+            });
+            canvas.renderAll();
+
+            if (!bgData) return;
+
+            // load bg image
+            const imgEl = new Image();
+            imgEl.crossOrigin = 'anonymous';
+            await new Promise<void>((resolve, reject) => {
+                imgEl.onload = () => resolve();
+                imgEl.onerror = err => reject(err);
+                imgEl.src = bgData;
+            });
+
+            // draw onto offscreen canvas rotated
+            const off = document.createElement('canvas');
+            off.width = H;
+            off.height = W;
+            const ctx = off.getContext('2d');
+            if (!ctx) return;
+            if (clockwise) {
+                ctx.translate(H, 0);
+                ctx.rotate((Math.PI / 2) * 1);
+            } else {
+                ctx.translate(0, W);
+                ctx.rotate((-Math.PI / 2) * 1);
+            }
+            ctx.drawImage(imgEl, 0, 0);
+
+            const rotatedDataURL = off.toDataURL();
+
+            // create rotated image element
+            const rotImg = new Image();
+            rotImg.crossOrigin = 'anonymous';
+            await new Promise<void>((resolve, reject) => {
+                rotImg.onload = () => resolve();
+                rotImg.onerror = err => reject(err);
+                rotImg.src = rotatedDataURL;
+            });
+
+            // set canvas new size
+            canvas.setWidth(H);
+            canvas.setHeight(W);
+            if (canvas.lowerCanvasEl && canvas.lowerCanvasEl.parentElement) {
+                const lower = canvas.lowerCanvasEl;
+                lower.style.width = `${H}px`;
+                lower.style.height = `${W}px`;
+                lower.parentElement.style.width = `${H}px`;
+                lower.parentElement.style.height = `${W}px`;
+            }
+
+            // set rotated background
+            const fImg = new (fabric as any).Image(rotImg, { selectable: false });
+            canvas.setBackgroundImage(fImg, canvas.renderAll.bind(canvas));
+
+            // transform each object's center and rotate its angle
+            objs.forEach((o: any) => {
+                try {
+                    const c = o.getCenterPoint();
+                    let newCenterX: number, newCenterY: number;
+                    if (clockwise) {
+                        newCenterX = c.y;
+                        newCenterY = W - c.x;
+                    } else {
+                        newCenterX = H - c.y;
+                        newCenterY = c.x;
+                    }
+                    o.setPositionByOrigin && o.setPositionByOrigin(new (fabric as any).Point(newCenterX, newCenterY), 'center', 'center');
+                    o.angle = ((o.angle || 0) + (clockwise ? 90 : -90)) % 360;
+                    o.setCoords && o.setCoords();
+                } catch (e) {}
+            });
+
+            // reset viewport transform
+            canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
+            canvas.requestRenderAll();
+            schedulePushWithType('modified');
+            try {
+                dispatch('rotated', { clockwise });
+            } catch (e) {}
+        } catch (e) {
+            console.warn('rotate failed', e);
+        }
+    }
 </script>
 
 <div class="canvas-editor">
