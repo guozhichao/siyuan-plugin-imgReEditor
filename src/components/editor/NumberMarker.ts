@@ -43,6 +43,26 @@ export class NumberMarker extends FabricObject {
         // No stroke by default unless specified
         this.stroke = options?.stroke || null;
         this.strokeWidth = options?.strokeWidth || 0;
+
+        // Lock scaling and rotation as per user request: "only move, no resize"
+        this.lockScalingX = true;
+        this.lockScalingY = true;
+        this.lockRotation = true;
+        this.lockSkewingX = true;
+        this.lockSkewingY = true;
+
+        // Hide scaling and rotation controls
+        this.setControlsVisibility({
+            mt: false,
+            mb: false,
+            ml: false,
+            mr: false,
+            bl: false,
+            br: false,
+            tl: false,
+            tr: false,
+            mtr: false,
+        });
     }
 
     _render(ctx: CanvasRenderingContext2D) {
