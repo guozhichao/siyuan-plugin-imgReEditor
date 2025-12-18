@@ -20,6 +20,7 @@
     import { EraserBrush } from '@erase2d/fabric';
     import Arrow from './Arrow';
     import NumberMarker from './NumberMarker';
+    import CropRect from './CropRect';
 
     export let dataURL: string | null = null;
     export let fileName: string | undefined;
@@ -1205,12 +1206,17 @@
     let cropRect: any = null;
     let _cropHandlers: any = null;
     let _cropKeyHandler: ((e: KeyboardEvent) => void) | null = null;
+    let cropRestoreData: any = null; // To track if we need to undo a restore on cancel
 
     // Crop helpers (exported)
-    export function enterCropMode() {
+    export function enterCropMode(
+        restoreCrop?: { left: number; top: number; width: number; height: number },
+        originalSize?: { width: number; height: number }
+    ) {
         if (!canvas) return;
         if (cropMode) return;
         cropMode = true;
+        cropRestoreData = null;
 
         // Deselect all objects
         try {
@@ -1223,18 +1229,98 @@
             obj.evented = false;
         });
 
+        // If we are re-cropping, restore the full canvas view
+        if (restoreCrop && originalSize) {
+            try {
+
+
+                const { left, top } = restoreCrop;
+
+                // Clear clipPath to reveal full image
+                const bg = canvas.backgroundImage;
+                if (bg) {
+                    bg.set({ clipPath: null });
+                    bg.dirty = true;
+                }
+
+                // Shift all objects back
+                canvas.getObjects().forEach((obj: any) => {
+                    obj.left = (obj.left || 0) + left;
+                    obj.top = (obj.top || 0) + top;
+                    obj.setCoords();
+                });
+                if (canvas.backgroundImage) {
+                    const bg = canvas.backgroundImage;
+                    bg.left = (bg.left || 0) + left;
+                    bg.top = (bg.top || 0) + top;
+                    bg.setCoords();
+                }
+
+                // Store restore data so we can revert if cancelled
+                cropRestoreData = {
+                    left,
+                    top,
+                    finalWidth: restoreCrop.width,
+                    finalHeight: restoreCrop.height,
+                };
+
+                // Create initial crop rect
+                cropRect = new CropRect({
+                    left: left,
+                    top: top,
+                    width: restoreCrop.width,
+                    height: restoreCrop.height,
+                    fill: 'rgba(0,0,0,0.25)',
+                    stroke: '#00ff00',
+                    strokeWidth: 2,
+                    strokeDashArray: [5, 5],
+                    selectable: true, // Allow selecting to adjust
+                    evented: true,
+                    lockRotation: true,
+                    hasControls: true,
+                    hasBorders: true,
+                    transparentCorners: false,
+                    cornerColor: 'white',
+                    cornerStrokeColor: 'black',
+                    cornerSize: 10,
+                });
+                (cropRect as any)._isCropRect = true;
+                canvas.add(cropRect);
+                canvas.setActiveObject(cropRect);
+                canvas.requestRenderAll();
+                fitImageToViewport(); // Fit restored original view to viewport
+            } catch (e) {
+                console.warn('Failed to restore pre-crop view', e);
+            }
+        }
+
         let isDrawing = false;
         let startX = 0;
         let startY = 0;
 
         const onMouseDown = (opt: any) => {
-            if (cropRect) return;
+            // If we have an active crop rect and user clicks it, let Fabric handle interaction
+            if (cropRect) {
+                const target = opt.target;
+                if (target === cropRect) return;
+
+                // If in restore mode, do not create new crop rect, only adjust existing
+                if (restoreCrop) return;
+
+                // If user clicks outside existing crop rect, remove existing and start new
+                if (cropRect.selectable) {
+                    canvas.remove(cropRect);
+                    cropRect = null;
+                }
+            }
+
+            if (cropRect) return; // Should allow Fabric to handle drag if exists
+
             const pointer = canvas.getPointer(opt.e);
             isDrawing = true;
             startX = pointer.x;
             startY = pointer.y;
-            cropRect = new Rect({
-                type: 'custom-crop-rect',
+            cropRect = new CropRect({
                 left: startX,
                 top: startY,
                 width: 0,
@@ -1243,7 +1329,7 @@
                 stroke: '#00ff00',
                 strokeWidth: 2,
                 strokeDashArray: [5, 5],
-                selectable: false,
+                selectable: false, // Initially false while dragging
                 evented: false,
                 lockRotation: true,
             });
@@ -1270,6 +1356,140 @@
             canvas.requestRenderAll();
         };
 
+        const applyCrop = async () => {
+            if (!cropRect || !canvas.backgroundImage) {
+                if (cropRect) canvas.remove(cropRect);
+                return;
+            }
+
+            try {
+                // Ensure positive dimensions
+                const rWidth = (cropRect.width || 0) * (cropRect.scaleX || 1);
+                const rHeight = (cropRect.height || 0) * (cropRect.scaleY || 1);
+                const rLeft = cropRect.left || 0;
+                const rTop = cropRect.top || 0;
+
+                const minSize = 6;
+                if (rWidth < minSize || rHeight < minSize) {
+                    canvas.remove(cropRect);
+                    cropRect = null;
+                    return;
+                }
+
+                // Remove crop rect from UI
+                canvas.remove(cropRect);
+
+                const bg = canvas.backgroundImage;
+
+                // Calculate clipRect position relative to the background image's center
+                // Fabric's clipPath is relative to the object's center
+
+                // 1. Get absolute coordinates of crop rect
+                const absoluteLeft = rLeft;
+                const absoluteTop = rTop;
+
+                // 2. Adjust for background image's position
+                // Note: This simple calculation assumes 0 rotation and specific origin.
+                // For robust implementation with transforms, we might need invertTransform.
+                // Assuming bg.originX/Y is 'left'/'top' or 'center'/'center'
+
+                // Let's assume standard image placement (left/top at 0,0 or similar) for now,
+                // but better to rely on what Fabric expects for clipPath.
+
+                // Important: clipPath on an object is positioned relative to that object's center.
+                // We need to translate the absolute crop coordinates to object-relative coordinates.
+
+                const bgCenter = bg.getCenterPoint();
+                const bgLeft = bgCenter.x - (bg.width * bg.scaleX) / 2;
+                const bgTop = bgCenter.y - (bg.height * bg.scaleY) / 2;
+
+                const clipLeft = absoluteLeft - bgCenter.x + rWidth / 2;
+                const clipTop = absoluteTop - bgCenter.y + rHeight / 2;
+
+                // Create clip path (Rect)
+                const clipPath = new Rect({
+                    left: clipLeft / bg.scaleX, // Scale back to unscaled image coordinates
+                    top: clipTop / bg.scaleY,
+                    width: rWidth / bg.scaleX,
+                    height: rHeight / bg.scaleY,
+                    originX: 'center',
+                    originY: 'center',
+                });
+
+                // Apply clipPath
+                bg.set({
+                    clipPath: clipPath,
+                });
+
+                // Now we need to resize the canvas to match the cropped area size
+                // And shift the background image (and all other objects?) so the cropped area is at (0,0) of canvas
+
+                // Move everything so crop-top-left becomes 0,0
+                const shiftX = -rLeft;
+                const shiftY = -rTop;
+
+                // Shift Image
+                bg.left += shiftX;
+                bg.top += shiftY;
+                bg.setCoords();
+
+                // Shift all other objects
+                canvas.getObjects().forEach((obj: any) => {
+                    if (obj === bg) return;
+                    if (obj._isCropRect) return;
+                    obj.left += shiftX;
+                    obj.top += shiftY;
+                    obj.setCoords();
+                });
+
+                canvas.requestRenderAll();
+
+                // Record crop data
+                // For restoration, we'll need to know the shift we applied to everything
+                // Or we keep track of the cumulative crop?
+                // The current architecture expects 'cropData' to help restore.
+                // restore logic currently expects 'restoreCrop' (prev crop) + 'originalSize'.
+
+                const cropData = { left: rLeft, top: rTop, width: rWidth, height: rHeight };
+
+                try {
+                    dispatch('cropApplied', { cropData });
+                } catch (e) {}
+
+                fitImageToViewport();
+
+                // Cleanup listeners
+                canvas.off('mouse:down', onMouseDown);
+                canvas.off('mouse:move', onMouseMove);
+                canvas.off('mouse:up', onMouseUp);
+                if (_cropKeyHandler) {
+                    document.removeEventListener('keydown', _cropKeyHandler as any);
+                    _cropKeyHandler = null;
+                }
+                _cropHandlers = null;
+
+                // Clear active object (so crop rect is not selected)
+                canvas.discardActiveObject();
+
+                // Switch to select tool
+                setTool(null);
+
+                cropRestoreData = null;
+                cropMode = false;
+                cropRect = null;
+
+                // restore selectability
+                canvas.getObjects().forEach((obj: any) => {
+                    obj.selectable = true;
+                    obj.evented = true;
+                });
+
+                schedulePushWithType('modified');
+            } catch (e) {
+                console.warn('Failed to apply crop', e);
+            }
+        };
+
         const onMouseUp = async () => {
             if (!isDrawing) return;
             isDrawing = false;
@@ -1277,83 +1497,49 @@
             const minSize = 6;
             const width = (cropRect.width || 0) * (cropRect.scaleX || 1);
             const height = (cropRect.height || 0) * (cropRect.scaleY || 1);
+
             if (width < minSize || height < minSize) {
                 try {
                     canvas.remove(cropRect);
                 } catch (e) {}
                 cropRect = null;
-                cropMode = false;
-                // restore selectability
-                canvas.getObjects().forEach((obj: any) => {
-                    obj.selectable = true;
-                    obj.evented = true;
-                });
+                // If we were drawing a new one and cancelled by making it small,
+                // do we exit crop mode? Probably not if we are in "adjust" flow.
+                // But for now let's just remove the tiny rect.
                 canvas.requestRenderAll();
                 return;
             }
 
-            // finalize: apply crop immediately
-            try {
-                const left = Math.max(0, cropRect.left || 0);
-                const top = Math.max(0, cropRect.top || 0);
-                const cwidth = Math.min(width, canvas.getWidth());
-                const cheight = Math.min(height, canvas.getHeight());
-
-                // remove crop rectangle first
-                try {
-                    canvas.remove(cropRect);
-                } catch (e) {}
-
-                // shift objects
-                canvas.getObjects().forEach((obj: any) => {
-                    if (obj._isCropRect) return;
-                    obj.left = (obj.left || 0) - left;
-                    obj.top = (obj.top || 0) - top;
-                    obj.setCoords();
-                });
-
-                // adjust background image
-                if (canvas.backgroundImage) {
-                    const bg = canvas.backgroundImage;
-                    bg.left = (bg.left || 0) - left;
-                    bg.top = (bg.top || 0) - top;
-                    bg.setCoords();
-                }
-
-                // set canvas size
-                canvas.setWidth(cwidth);
-                canvas.setHeight(cheight);
-
-                // reset viewport transform
-                canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
-                canvas.requestRenderAll();
-
-                // record cropData and notify host
-                const cropData = { left, top, width: cwidth, height: cheight };
-                try {
-                    dispatch('cropApplied', { cropData });
-                } catch (e) {}
-                schedulePushWithType('modified');
-            } catch (e) {
-                console.warn('Failed to apply crop', e);
+            // If NOT in restore/adjust mode, auto-apply immediately on mouse up
+            if (!restoreCrop) {
+                applyCrop();
+                return;
             }
 
-            cropRect = null;
-            cropMode = false;
-
-            // restore selectability
-            canvas.getObjects().forEach((obj: any) => {
-                obj.selectable = true;
-                obj.evented = true;
+            // Instead of applying immediately, make it editable
+            cropRect.set({
+                selectable: true,
+                evented: true,
+                hasControls: true,
+                hasBorders: true,
+                transparentCorners: false,
+                cornerColor: 'white',
+                cornerStrokeColor: 'black',
+                cornerSize: 10,
+                lockRotation: true,
             });
+            cropRect.setCoords();
+            canvas.setActiveObject(cropRect);
             canvas.requestRenderAll();
+
+            // Do NOT apply crop here. Wait for Enter.
         };
 
         // Attach listeners
         canvas.on('mouse:down', onMouseDown);
         canvas.on('mouse:move', onMouseMove);
         canvas.on('mouse:up', onMouseUp);
-        _cropHandlers = { onMouseDown, onMouseMove, onMouseUp };
+        _cropHandlers = { onMouseDown, onMouseMove, onMouseUp, applyCrop };
 
         // keyboard shortcuts for crop
         _cropKeyHandler = (e: KeyboardEvent) => {
@@ -1365,15 +1551,40 @@
                         cropRect = null;
                     }
                 } catch (err) {}
+
+                // If we restored the view, we must undo that (revert to previous cropped state)
+                if (cropRestoreData) {
+                    try {
+                        const { left, top, finalWidth, finalHeight } = cropRestoreData;
+                        // Shift back
+                        canvas.getObjects().forEach((obj: any) => {
+                            obj.left = (obj.left || 0) - left;
+                            obj.top = (obj.top || 0) - top;
+                            obj.setCoords();
+                        });
+                        if (canvas.backgroundImage) {
+                            const bg = canvas.backgroundImage;
+                            bg.left = (bg.left || 0) - left;
+                            bg.top = (bg.top || 0) - top;
+                            bg.setCoords();
+                        }
+ 
+                    } catch (e) {
+                        console.warn('Failed to revert crop restore', e);
+                    }
+                }
+
                 cropMode = false;
+                cropRestoreData = null;
+
                 canvas.getObjects().forEach((obj: any) => {
                     obj.selectable = true;
                     obj.evented = true;
                 });
                 canvas.requestRenderAll();
             } else if (e.key === 'Enter') {
-                // finalize immediately
-                onMouseUp();
+                // finalize
+                applyCrop();
             } else if (e.key === 'Delete' || e.key === 'Backspace') {
                 if (cropRect) {
                     try {
@@ -1402,17 +1613,45 @@
             } catch (e) {}
             _cropHandlers = null;
         }
+
+        // If we exit forcefully without Enter/Escape (e.g. switching tool), we generally assume cancel?
+        // Or if there is a rect, should we apply it?
+        // Usually switching tools implies cancelling the current modal operation.
+        // So we should perform the "Escape" logic (revert restore).
+
         try {
             if (cropRect) {
                 canvas.remove(cropRect);
                 cropRect = null;
             }
         } catch (e) {}
+
+        if (cropRestoreData) {
+            try {
+                const { left, top, finalWidth, finalHeight } = cropRestoreData;
+                canvas.getObjects().forEach((obj: any) => {
+                    obj.left = (obj.left || 0) - left;
+                    obj.top = (obj.top || 0) - top;
+                    obj.setCoords();
+                });
+                if (canvas.backgroundImage) {
+                    const bg = canvas.backgroundImage;
+                    bg.left = (bg.left || 0) - left;
+                    bg.top = (bg.top || 0) - top;
+                    bg.setCoords();
+                }
+                canvas.setWidth(finalWidth);
+                canvas.setHeight(finalHeight);
+            } catch (e) {}
+        }
+        cropRestoreData = null;
+
         cropMode = false;
         try {
             document.removeEventListener('keydown', _cropKeyHandler as any);
         } catch (e) {}
         _cropKeyHandler = null;
+
         canvas.getObjects().forEach((obj: any) => {
             obj.selectable = true;
             obj.evented = true;
@@ -1423,8 +1662,8 @@
     // If there's a pending crop rectangle, apply it (used by host before save)
     export function applyPendingCrop() {
         try {
-            if (_cropHandlers && _cropHandlers.onMouseUp) {
-                _cropHandlers.onMouseUp();
+            if (_cropHandlers && typeof _cropHandlers.applyCrop === 'function') {
+                _cropHandlers.applyCrop();
             }
         } catch (e) {}
     }
@@ -1533,37 +1772,95 @@
 
     export function fitImageToViewport() {
         if (!canvas) return;
-        const bg = canvas.backgroundImage;
-        if (!bg) return;
 
         const workspace = container.closest('.canvas-editor');
         if (!workspace) return;
 
         const cw = workspace.clientWidth;
         const ch = workspace.clientHeight;
+        const w = canvas.getWidth();
+        const h = canvas.getHeight();
 
-        // Use bounding rect to account for rotation and flipping accurately
-        const boundingRect = bg.getBoundingRect();
-        const imgW = boundingRect.width;
-        const imgH = boundingRect.height;
+        // Check if canvas dimensions match workspace (Uncropped / Artboard mode)
+        // or if we have a custom size (Cropped / True Resolution mode)
+        // Use a small tolerance for pixel differences
+        const isCustomSize = Math.abs(w - cw) > 2 || Math.abs(h - ch) > 2;
 
-        if (imgW <= 0 || imgH <= 0) return;
+        if (isCustomSize) {
+            // Custom Size Mode (e.g. Cropped):
+            // Do NOT resize backstore (logical pixels). Use CSS scaling to fit viewport.
 
-        // Set canvas buffer size to match workspace
-        canvas.setDimensions({ width: cw, height: ch });
+            // 1. Reset viewport transform to identity (ensure 1:1 logical mapping)
+            canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
 
-        // Calculate fit scale and center offset
-        const scale = Math.min(cw / imgW, ch / imgH, 1);
+            // 2. Calculate CSS scale to fit
+            const scale = Math.min(cw / w, ch / h, 1) * 0.98; // 98% fit to leave tiny margin
 
-        // Calculate translation: we need to center the bounding box
-        // First, reset transform to [1,0,0,1,0,0] conceptually, then apply scale
-        // and find where the top-left of the bounding box should go.
-        const tx = (cw - imgW * scale) / 2 - boundingRect.left * scale;
-        const ty = (ch - imgH * scale) / 2 - boundingRect.top * scale;
+            const finalCssW = w * scale;
+            const finalCssH = h * scale;
 
-        canvas.setViewportTransform([scale, 0, 0, scale, tx, ty]);
-        updateZoomDisplay();
-        canvas.requestRenderAll();
+            // 3. Apply CSS dimensions
+            canvas.setDimensions({ width: finalCssW, height: finalCssH }, { cssOnly: true });
+
+            // 4. Center the canvas container
+            const containerEl = canvas.getElement().parentNode as HTMLElement;
+            if (containerEl && containerEl.classList.contains('canvas-container')) {
+                containerEl.style.margin = '0 auto'; // Horizontal center
+                // Vertical center
+                if (finalCssH < ch) {
+                    containerEl.style.marginTop = `${(ch - finalCssH) / 2}px`;
+                } else {
+                    containerEl.style.marginTop = '0px';
+                }
+            }
+            updateZoomDisplay();
+            canvas.requestRenderAll();
+        } else {
+            // Uncropped / Artboard Mode:
+            // Canvas fills the workspace. We zoom the content (backgroundImage) to fit.
+
+            // Ensure logical size matches workspace
+            canvas.setDimensions({ width: cw, height: ch });
+
+            // Ensure CSS size matches workspace (reset any previous CSS scaling)
+            canvas.setDimensions({ width: cw, height: ch }, { cssOnly: true });
+
+            // Reset margins
+            const containerEl = canvas.getElement().parentNode as HTMLElement;
+            if (containerEl && containerEl.classList.contains('canvas-container')) {
+                containerEl.style.margin = '0';
+                containerEl.style.marginTop = '0';
+            }
+
+            const bg = canvas.backgroundImage;
+            if (bg) {
+                let imgW, imgH, imgCenterX, imgCenterY;
+                if (bg.clipPath && bg.clipPath.type === 'rect') {
+                    const cp = bg.clipPath;
+                    imgW = cp.width * (bg.scaleX || 1);
+                    imgH = cp.height * (bg.scaleY || 1);
+                    imgCenterX = imgW / 2;
+                    imgCenterY = imgH / 2;
+                } else {
+                    const boundingRect = bg.getBoundingRect();
+                    imgW = boundingRect.width;
+                    imgH = boundingRect.height;
+                    imgCenterX = boundingRect.left + imgW / 2;
+                    imgCenterY = boundingRect.top + imgH / 2;
+                }
+
+                if (imgW > 0 && imgH > 0) {
+                    // Calculate fit scale and center offset for the CONTENT
+                    const scale = Math.min(cw / imgW, ch / imgH, 1);
+                    const tx = cw / 2 - imgCenterX * scale;
+                    const ty = ch / 2 - imgCenterY * scale;
+
+                    canvas.setViewportTransform([scale, 0, 0, scale, tx, ty]);
+                }
+            }
+            updateZoomDisplay();
+            canvas.requestRenderAll();
+        }
     }
 
     function pushInitialHistory() {
@@ -1880,10 +2177,49 @@
         if (!canvas || !canvas.backgroundImage) return null;
 
         const bg = canvas.backgroundImage;
-        // Calculate the actual bounding box of the background image after flip/rotation
-        const boundingRect = bg.getBoundingRect();
-        const imgW = boundingRect.width;
-        const imgH = boundingRect.height;
+
+        // Check if cropped
+        if (bg.clipPath && bg.clipPath.type === 'rect') {
+            // We need to export strictly the cropped area.
+            // If we loaded from JSON, the canvas buffer might be larger than the crop (viewport size),
+            // while the content is shifted/clipped.
+            // We need to resize the canvas to the strict crop dimensions before export.
+
+            const cp = bg.clipPath as any; // Fabric Rect
+            // Calculate visual dimensions of the clip (crop size in canvas pixels)
+            // clipPath dimensions are relative to object.
+            const cropWidth = cp.width * (cp.scaleX || 1) * (bg.scaleX || 1);
+            const cropHeight = cp.height * (cp.scaleY || 1) * (bg.scaleY || 1);
+
+            const currentVPT = canvas.viewportTransform ? [...canvas.viewportTransform] : null;
+            const currentW = canvas.getWidth();
+            const currentH = canvas.getHeight();
+
+            try {
+                // 1. Resize canvas to precise crop size
+                canvas.setDimensions({ width: cropWidth, height: cropHeight });
+
+                // 2. Reset zoom to 1:1.
+                // Since objects were shifted in applyCrop so (0,0) is top-left of crop, this should align perfectly.
+                canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
+                canvas.renderAll();
+
+                // 3. Calculate multiplier for original resolution export
+
+                return canvas.toDataURL({
+                    ...options,
+                    multiplier: 1,
+                    enableRetinaScaling: false,
+                });
+            } finally {
+                // Restore state
+                canvas.setDimensions({ width: currentW, height: currentH });
+                if (currentVPT) canvas.setViewportTransform(currentVPT);
+                canvas.renderAll();
+            }
+        }
+
+        // Original logic for uncropped images (full artboard export)
 
         // Save current state
         const currentVPT = canvas.viewportTransform ? [...canvas.viewportTransform] : null;
@@ -1891,18 +2227,34 @@
         const currentH = canvas.getHeight();
 
         try {
-            // Resize to the current bounding dimensions for export
+            // 1. Reset scale to 1:1 to measure natural size
+            canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
+            canvas.renderAll(); // Ensure coords are updated
+
+            // 2. Measure background at 100% scale
+            const boundingRect = bg.getBoundingRect();
+            const imgW = boundingRect.width;
+            const imgH = boundingRect.height;
+
+            // 3. Resize canvas to fit full image
             canvas.setDimensions({ width: imgW, height: imgH });
 
-            // Center everything for the export
+            // 4. Align image to top-left (0,0) of the export canvas
+            // boundingRect.left/top might be non-zero if centered or rotated
+            // We shift viewport so the bounding box top-left moves to 0,0
             const tx = -boundingRect.left;
             const ty = -boundingRect.top;
+
             canvas.setViewportTransform([1, 0, 0, 1, tx, ty]);
             canvas.renderAll();
 
-            // Export at original quality
-            const dataURL = canvas.toDataURL(options);
-            return dataURL;
+            // 5. Export
+            return canvas.toDataURL({
+                format: options.format as any,
+                quality: options.quality,
+                multiplier: 1,
+                enableRetinaScaling: false,
+            });
         } finally {
             // Restore workspace state
             canvas.setDimensions({ width: currentW, height: currentH });

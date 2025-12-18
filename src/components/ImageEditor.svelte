@@ -421,7 +421,11 @@
                             canvasEditorRef &&
                             typeof canvasEditorRef.enterCropMode === 'function'
                         ) {
-                            canvasEditorRef.enterCropMode();
+                            if (isCropped && cropData) {
+                                canvasEditorRef.enterCropMode(cropData, originalImageDimensions);
+                            } else {
+                                canvasEditorRef.enterCropMode();
+                            }
                             pendingCropRequested = false;
                         }
                     } catch (err) {
