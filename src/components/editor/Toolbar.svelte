@@ -20,7 +20,7 @@
         class:b3-button--outline={active !== 'hand'}
         on:click={() => emit('tool', { tool: 'hand' })}
     >
-        抓手
+        <svg class="icon" viewBox="0 0 24 24"><path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0"/><path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2"/><path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.83L7 15"/></svg>
     </button>
     <button
         class="b3-button"
@@ -28,7 +28,7 @@
         class:b3-button--outline={active !== 'select'}
         on:click={() => emit('tool', { tool: 'select' })}
     >
-        选择
+        <svg class="icon" viewBox="0 0 24 24"><path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/><path d="M13 13l6 6"/></svg>
     </button>
     <button
         class="b3-button"
@@ -36,7 +36,7 @@
         class:b3-button--outline={active !== 'crop'}
         on:click={() => emit('tool', { tool: 'crop' })}
     >
-        裁剪
+        <svg class="icon" viewBox="0 0 24 24"><path d="M6.13 1L6 16a2 2 0 0 0 2 2h15"/><path d="M1 6.13L16 6a2 2 0 0 1 2 2v15"/><line x1="9" y1="9" x2="15" y2="15"/><line x1="15" y1="9" x2="9" y2="15"/></svg>
     </button>
     <div class="shape-group">
         <button
@@ -45,7 +45,7 @@
             class:b3-button--outline={!(active === 'shape' && activeShape === 'rect')}
             on:click={() => emit('tool', { tool: 'shape', shape: 'rect' })}
         >
-            矩形
+            <svg class="icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/></svg>
         </button>
         <button
             class="b3-button"
@@ -53,7 +53,7 @@
             class:b3-button--outline={!(active === 'shape' && activeShape === 'circle')}
             on:click={() => emit('tool', { tool: 'shape', shape: 'circle' })}
         >
-            圆形
+            <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg>
         </button>
     </div>
     <button
@@ -62,7 +62,7 @@
         class:b3-button--outline={active !== 'arrow'}
         on:click={() => emit('tool', { tool: 'arrow' })}
     >
-        箭头
+        <svg class="icon" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg>
     </button>
     <button
         class="b3-button"
@@ -70,7 +70,7 @@
         class:b3-button--outline={active !== 'number-marker'}
         on:click={() => emit('tool', { tool: 'number-marker' })}
     >
-        序号
+        <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><text x="12" y="16" text-anchor="middle" font-size="12" fill="currentColor">1</text></svg>
     </button>
     <button
         class="b3-button"
@@ -78,7 +78,7 @@
         class:b3-button--outline={active !== 'text'}
         on:click={() => emit('tool', { tool: 'text' })}
     >
-        文字
+        <svg class="icon" viewBox="0 0 24 24"><path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/></svg>
     </button>
     <button
         class="b3-button"
@@ -86,7 +86,7 @@
         class:b3-button--outline={active !== 'brush'}
         on:click={() => emit('tool', { tool: 'brush' })}
     >
-        画笔
+        <svg  class="fill-icon" viewBox="0 0 1024 1024"><path d="M173.013333 882.56l72.106667-203.733333L741.546667 132.266667 789.333333 129.92l76.373334 69.333333 2.346666 47.786667-496.64 546.773333z m109.44-181.333333l-35.84 101.76 99.2-44.586667 478.72-526.933333v-12.586667l-50.773333-45.44h-12.373333z"/><path d="M678.229333 202.026667l126.336 114.752-28.693333 31.573333-126.336-114.730667z"/></svg>
     </button>
     <button
         class="b3-button"
@@ -94,7 +94,7 @@
         class:b3-button--outline={active !== 'eraser'}
         on:click={() => emit('tool', { tool: 'eraser' })}
     >
-        橡皮
+        <svg class="fill-icon" viewBox="0 0 1024 1024"><path d="M980.9 424.1c12.5-12.5 12.5-32.8 0-45.3L636.7 34.6c-12.5-12.5-32.8-12.5-45.3 0L90.5 535.5c-50 50-50 131 0 181l272 270.3c24 23.8 56.4 37.2 90.2 37.2H864c17.7 0 32-14.3 32-32 0-8.8-3.6-16.8-9.4-22.6-5.8-5.8-13.8-9.4-22.6-9.4H599.5c-57 0-85.6-68.9-45.3-109.3l426.7-426.6zM434.8 879.7c-25 25-65.5 25-90.5 0L135.8 671.3c-25-25-25-65.5 0-90.5l127.9-127.9 299 299-127.9 127.8z"/></svg>
     </button>
     <button
         class="b3-button"
@@ -102,24 +102,35 @@
         class:b3-button--outline={active !== 'transform'}
         on:click={() => emit('tool', { tool: 'transform' })}
     >
-        变换
+        <svg class="fill-icon" viewBox="0 0 1024 1024"><path d="M1024 0v1024H0V0z" fill="#FFFFFF" fill-opacity=".01"/><path d="M948.363636 386.327273c45.917091 19.828364 33.186909 87.156364-15.080727 90.368l-3.607273 0.116363H121.274182a47.150545 47.150545 0 0 1-47.034182-43.659636l-0.139636-3.490909V80.826182c0-32.744727 32.349091-55.156364 62.603636-44.567273l3.258182 1.256727L948.363636 386.350545z m-18.688 160.861091c50.013091 0 65.000727 66.885818 21.946182 88.925091l-3.258182 1.536L139.938909 986.461091a47.173818 47.173818 0 0 1-65.722182-39.842909l-0.116363-3.467637V594.385455c0-24.878545 19.246545-45.242182 43.636363-47.034182l3.537455-0.139637h808.401454z m-228.328727-164.724364L168.424727 152.552727v229.911273h532.922182z m0 259.048727H168.424727v229.911273l532.922182-229.911273z"/></svg>
     </button>
     <button class="b3-button b3-button--outline" on:click={() => emit('undo')} disabled={!canUndo}>
-        撤回{#if undoCount > 0}
-            ({undoCount}){/if}
+        <svg class="icon" viewBox="0 0 24 24"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>
     </button>
     <button class="b3-button b3-button--outline" on:click={() => emit('redo')} disabled={!canRedo}>
-        恢复{#if redoCount > 0}
-            ({redoCount}){/if}
+        <svg class="icon" viewBox="0 0 24 24"><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13"/></svg>
     </button>
-    <button class="b3-button b3-button--outline" on:click={() => emit('save')}>保存</button>
-    <button class="b3-button b3-button--outline" on:click={() => emit('cancel')}>取消</button>
+    <button class="b3-button b3-button--outline" on:click={() => emit('save')}><svg class="icon" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17,21 17,13 7,13 7,21"/><polyline points="7,3 7,8 15,8"/></svg></button>
+    <button class="b3-button b3-button--outline" on:click={() => emit('cancel')}><svg class="icon" viewBox="0 0 24 24"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg></button>
 
     <style>
     </style>
 </div>
 
 <style>
+    .icon {
+        width: 16px;
+        height: 16px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 2;
+    }
+    .fill-icon {
+        width: 16px;
+        height: 16px;
+        fill: currentColor;
+        stroke: none;
+    }
     .editor-toolbar {
         position: sticky;
         top: 0;
@@ -127,7 +138,6 @@
         display: flex;
         gap: 6px;
         padding: 8px;
-        background: rgba(255, 255, 255, 0.98);
         border-bottom: 1px solid rgba(0, 0, 0, 0.06);
         align-items: center;
     }
