@@ -557,20 +557,6 @@
                                     ? hit.strokeWidth
                                     : activeToolOptions.strokeWidth;
                             canvas.requestRenderAll();
-                            // try to enter editing mode
-                            try {
-                                if (typeof (hit as any).enterEditing === 'function') {
-                                    (hit as any).enterEditing();
-                                    (hit as any).selectAll && (hit as any).selectAll();
-                                } else if (typeof (hit as any).enterEdit === 'function') {
-                                    (hit as any).enterEdit();
-                                }
-                            } catch (e) {
-                                console.warn(
-                                    'CanvasEditor: enter editing failed on existing text',
-                                    e
-                                );
-                            }
                         } catch (e) {
                             console.warn('CanvasEditor: failed to select existing text', e);
                         }
