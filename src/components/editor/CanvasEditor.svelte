@@ -39,6 +39,37 @@
     let history: any[] = [];
     let historyIndex = -1;
     const MAX_HISTORY = 60;
+    const HISTORY_PROPS = [
+        'selectable',
+        'evented',
+        '_isArrow',
+        'arrowHead',
+        'erasable',
+        '_isCropRect',
+    ];
+    // Flag to prevent recursive history updates during undo/redo
+    let isHistoryProcessing = false;
+
+    function restoreObjectSelectionStates() {
+        if (!canvas) return;
+        try {
+            canvas.getObjects().forEach((obj: any) => {
+                if (obj._isCropRect || (canvas && obj === canvas.backgroundImage)) {
+                    obj.selectable = false;
+                    obj.evented = false;
+                } else {
+                    obj.selectable = true;
+                    obj.evented = true;
+                }
+                obj.setCoords();
+            });
+            if (canvas.backgroundImage) {
+                canvas.backgroundImage.setCoords();
+            }
+        } catch (e) {
+            console.warn('CanvasEditor: restoreObjectSelectionStates failed', e);
+        }
+    }
 
     // Panning
     let isSpaceDown = false;
@@ -103,11 +134,11 @@
     function pushHistory() {
         try {
             if (!canvas) return;
-            const bg = canvas.backgroundImage;
-            if (!bg) {
-                console.warn('pushInitialHistory: no background image yet');
-                return;
-            }
+            // const bg = canvas.backgroundImage;
+            // Only skip if there's absolutely no background and we expect one.
+            // But for history, we can still record state even if background is being loaded.
+            const json = canvas.toJSON(HISTORY_PROPS);
+
             // If recent changes are rapid modifications, merge them into the last step
             const now = Date.now();
             const MERGE_THRESHOLD = 800; // ms
@@ -115,7 +146,8 @@
                 lastActionType === 'modified' &&
                 lastPushTime > 0 &&
                 now - lastPushTime < MERGE_THRESHOLD &&
-                historyIndex === history.length - 1
+                historyIndex === history.length - 1 &&
+                historyIndex >= 0
             ) {
                 // replace last history snapshot
                 history[historyIndex] = json;
@@ -125,14 +157,16 @@
                     history = history.slice(0, historyIndex + 1);
                 }
                 history.push(json);
-                if (history.length > MAX_HISTORY) history.shift();
+                if (history.length > MAX_HISTORY) {
+                    history.shift();
+                }
                 historyIndex = history.length - 1;
             }
             lastPushTime = now;
             lastActionType = pendingActionType || null;
             notifyHistoryUpdate();
         } catch (e) {
-            // ignore
+            console.warn('CanvasEditor: pushHistory failed', e);
         }
     }
 
@@ -143,6 +177,7 @@
     let onDocKeyShortcuts: ((e: KeyboardEvent) => void) | null = null;
 
     const schedulePushWithType = (type: string) => {
+        if (isHistoryProcessing) return; // Skip if we are currently undoing/redoing
         pendingActionType = type;
         clearTimeout((schedulePushWithType as any)._t);
         (schedulePushWithType as any)._t = setTimeout(() => {
@@ -364,6 +399,16 @@
             } else if (key === 'v') {
                 e.preventDefault();
                 pasteClipboard();
+            } else if (key === 'z') {
+                e.preventDefault();
+                if (e.shiftKey) {
+                    redo();
+                } else {
+                    undo();
+                }
+            } else if (key === 'y') {
+                e.preventDefault();
+                redo();
             }
         };
         document.addEventListener('keydown', onDocKeyShortcuts);
@@ -1412,7 +1457,7 @@
             if (!canvas) return;
             history = [];
             historyIndex = -1;
-            const json = canvas.toJSON(['selectable']);
+            const json = canvas.toJSON(HISTORY_PROPS);
             history.push(json);
             historyIndex = 0;
             notifyHistoryUpdate();
@@ -1500,30 +1545,44 @@
         return group;
     }
 
-    export function undo() {
+    export async function undo() {
+        if (isHistoryProcessing) return;
         try {
             if (!canvas) return;
             if (historyIndex <= 0) return;
+
+            isHistoryProcessing = true;
             historyIndex--;
             const json = history[historyIndex];
-            canvas.loadFromJSON(json, () => {
-                canvas.renderAll();
-                notifyHistoryUpdate();
-            });
-        } catch (e) {}
+            await canvas.loadFromJSON(json);
+            restoreObjectSelectionStates();
+            canvas.renderAll();
+            notifyHistoryUpdate();
+        } catch (e) {
+            console.warn('CanvasEditor: undo failed', e);
+        } finally {
+            isHistoryProcessing = false;
+        }
     }
 
-    export function redo() {
+    export async function redo() {
+        if (isHistoryProcessing) return;
         try {
             if (!canvas) return;
             if (historyIndex >= history.length - 1) return;
+
+            isHistoryProcessing = true;
             historyIndex++;
             const json = history[historyIndex];
-            canvas.loadFromJSON(json, () => {
-                canvas.renderAll();
-                notifyHistoryUpdate();
-            });
-        } catch (e) {}
+            await canvas.loadFromJSON(json);
+            restoreObjectSelectionStates();
+            canvas.renderAll();
+            notifyHistoryUpdate();
+        } catch (e) {
+            console.warn('CanvasEditor: redo failed', e);
+        } finally {
+            isHistoryProcessing = false;
+        }
     }
 
     export function getToolOptions() {
@@ -1726,46 +1785,15 @@
         if (!canvas) return;
         console.log('CanvasEditor.fromJSON called with:', json);
 
+        // Prevent history updates whilst loading JSON
+        isHistoryProcessing = true;
+
         try {
             await canvas.loadFromJSON(json);
             console.log('loadFromJSON completed, objects count:', canvas!.getObjects().length);
 
             // After loading, ensure all objects (except background) are selectable and evented
-            try {
-                canvas!.getObjects().forEach((obj: any, index: number) => {
-                    console.log(`Object ${index}:`, {
-                        type: obj.type,
-                        selectable: obj.selectable,
-                        evented: obj.evented,
-                        _isCropRect: obj._isCropRect,
-                        isBackground: obj === canvas!.backgroundImage,
-                    });
-
-                    // Don't make crop rectangles or background images selectable
-                    if (obj._isCropRect || obj === canvas!.backgroundImage) {
-                        console.log(`Skipping object ${index} (crop rect or background)`);
-                        return;
-                    }
-
-                    // Make shapes and other objects selectable and interactive
-                    obj.selectable = true;
-                    obj.evented = true;
-                    obj.setCoords();
-                    console.log(`Set object ${index} to selectable=true, evented=true`);
-                });
-            } catch (e) {
-                console.warn('Failed to restore object selectability', e);
-            }
-
-            // Ensure background image coordinates are updated (critical for flipped/rotated images)
-            if (canvas!.backgroundImage) {
-                try {
-                    canvas!.backgroundImage.setCoords();
-                    console.log('Background image coords updated');
-                } catch (e) {
-                    console.warn('Failed to update background image coords', e);
-                }
-            }
+            restoreObjectSelectionStates();
 
             canvas!.renderAll();
 
@@ -1778,6 +1806,9 @@
             }, 100);
 
             console.log('fromJSON completed, canvas rendered and will be fitted');
+
+            // Reset history to treat this state as initial
+            pushInitialHistory();
         } catch (e) {
             console.error('fromJSON failed:', e);
             // Even if loading fails, try to fit what we have
@@ -1785,6 +1816,8 @@
                 console.log('fromJSON error recovery: triggering auto-fit');
                 fitImageToViewport();
             }, 100);
+        } finally {
+            isHistoryProcessing = false;
         }
     }
 
