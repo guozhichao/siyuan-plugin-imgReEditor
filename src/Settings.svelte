@@ -18,7 +18,7 @@
 
     let groups: ISettingGroup[] = [
         {
-            name: t('settings.settingsGroup.group1') || 'Tab1',
+            name: '保存设置',
             items: [
                 {
                     key: 'storageMode',
