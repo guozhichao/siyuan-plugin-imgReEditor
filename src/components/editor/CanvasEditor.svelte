@@ -548,6 +548,14 @@
                                 (hit as any).fontSize || activeToolOptions.size;
                             activeToolOptions.fill =
                                 typeof hit.fill !== 'undefined' ? hit.fill : activeToolOptions.fill;
+                            activeToolOptions.stroke =
+                                typeof hit.stroke !== 'undefined'
+                                    ? hit.stroke
+                                    : activeToolOptions.stroke;
+                            activeToolOptions.strokeWidth =
+                                typeof hit.strokeWidth !== 'undefined'
+                                    ? hit.strokeWidth
+                                    : activeToolOptions.strokeWidth;
                             canvas.requestRenderAll();
                             // try to enter editing mode
                             try {
@@ -576,6 +584,8 @@
                         'Microsoft Yahei';
                     const fontSize = activeToolOptions.size || activeToolOptions.fontSize || 24;
                     const fill = activeToolOptions.fill || '#000000';
+                    const stroke = activeToolOptions.stroke || '#ffffff';
+                    const strokeWidth = activeToolOptions.strokeWidth || 0;
 
                     let itext: any = null;
                     // Try common fabric text classes in order of preference
@@ -586,6 +596,8 @@
                             fontFamily,
                             fontSize,
                             fill,
+                            stroke,
+                            strokeWidth,
                             selectable: true,
                             evented: true,
                         });
@@ -601,6 +613,8 @@
                                 fontFamily,
                                 fontSize,
                                 fill,
+                                stroke,
+                                strokeWidth,
                                 selectable: true,
                                 evented: true,
                             });
@@ -617,6 +631,8 @@
                                 fontFamily,
                                 fontSize,
                                 fill,
+                                stroke,
+                                strokeWidth,
                                 selectable: true,
                                 evented: true,
                             });
@@ -779,6 +795,17 @@
                         }
                     } catch (e) {}
                     dispatch('selection', { options: null, type: active.type });
+                } else if (['i-text', 'textbox', 'text'].includes(active.type)) {
+                    dispatch('selection', {
+                        options: {
+                            family: (active as any).fontFamily,
+                            size: (active as any).fontSize,
+                            fill: active.fill,
+                            stroke: active.stroke,
+                            strokeWidth: active.strokeWidth,
+                        },
+                        type: active.type,
+                    });
                 }
             } catch (e) {}
         }
@@ -1085,6 +1112,8 @@
                 activeToolOptions.family || activeToolOptions.fontFamily || 'Microsoft Yahei';
             activeToolOptions.size = activeToolOptions.size || activeToolOptions.fontSize || 24;
             activeToolOptions.fill = activeToolOptions.fill || '#000000';
+            activeToolOptions.stroke = activeToolOptions.stroke || '#ffffff';
+            activeToolOptions.strokeWidth = activeToolOptions.strokeWidth || 0;
         }
         // update cursor
         if (canvas) {
@@ -1737,6 +1766,9 @@
                             o.set('fontFamily', options.family);
                         if (typeof options.size !== 'undefined') o.set('fontSize', +options.size);
                         if (typeof options.fill !== 'undefined') o.set('fill', options.fill);
+                        if (typeof options.stroke !== 'undefined') o.set('stroke', options.stroke);
+                        if (typeof options.strokeWidth !== 'undefined')
+                            o.set('strokeWidth', options.strokeWidth);
                         o.setCoords && o.setCoords();
                     } else {
                         // shapes and other objects

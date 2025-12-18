@@ -200,6 +200,28 @@
                 on:input={e => emitChange({ fill: getValue(e) })}
             />
         </div>
+        <div class="row">
+            <label for="font-stroke">描边颜色</label>
+            <input
+                id="font-stroke"
+                type="color"
+                value={settings.stroke || '#ffffff'}
+                on:input={e => emitChange({ stroke: getValue(e) })}
+            />
+        </div>
+        <div class="row">
+            <label for="font-stroke-width">描边粗细</label>
+            <input
+                id="font-stroke-width"
+                type="range"
+                min="0"
+                max="10"
+                step="0.5"
+                value={settings.strokeWidth || 0}
+                on:input={e => emitChange({ strokeWidth: +getValue(e) })}
+            />
+            <span class="val">{settings.strokeWidth || 0}</span>
+        </div>
     {:else if tool === 'transform'}
         <div class="row">
             <div class="label">翻转</div>
