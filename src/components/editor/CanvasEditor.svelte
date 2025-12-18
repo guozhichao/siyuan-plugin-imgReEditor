@@ -1,6 +1,18 @@
 <script lang="ts">
     import { onMount, onDestroy, createEventDispatcher } from 'svelte';
-    import { fabric } from 'fabric';
+    import {
+        Canvas,
+        Triangle,
+        Line,
+        Rect,
+        Ellipse,
+        FabricImage,
+        Group,
+        util,
+        IText,
+        Textbox,
+        Point,
+    } from 'fabric';
 
     export let dataURL: string | null = null;
     export let fileName: string | undefined;
@@ -14,7 +26,7 @@
     let tempShape: any = null;
 
     let container: HTMLCanvasElement;
-    let canvas: fabric.Canvas | null = null;
+    let canvas: Canvas | null = null;
     const dispatch = createEventDispatcher();
     // Track if image has been loaded to prevent duplicate loads
     let imageLoaded = false;
@@ -190,13 +202,14 @@
         } catch (e) {}
     }
 
-    function pasteClipboard() {
+    async function pasteClipboard() {
         try {
             if (!canvas || !clipboard || clipboard.length === 0) return;
-            (fabric.util as any).enlivenObjects(clipboard, (enlivened: any[]) => {
+            try {
+                const enlivened = await util.enlivenObjects(clipboard);
                 if (!enlivened || enlivened.length === 0) return;
                 const added: any[] = [];
-                enlivened.forEach(o => {
+                enlivened.forEach((o: any) => {
                     // offset pasted objects slightly
                     o.left = (o.left || 0) + 12;
                     o.top = (o.top || 0) + 12;
@@ -209,19 +222,21 @@
                     canvas.discardActiveObject();
                     if (added.length === 1) canvas.setActiveObject(added[0]);
                     else {
-                        const group = new fabric.Group(added, { selectable: true });
+                        const group = new Group(added, { selectable: true });
                         canvas.add(group);
                         canvas.setActiveObject(group);
                     }
                     canvas.requestRenderAll();
                     schedulePushWithType('added');
                 }
-            });
+            } catch (e) {
+                console.warn('CanvasEditor: paste failed', e);
+            }
         } catch (e) {}
     }
 
     onMount(() => {
-        canvas = new fabric.Canvas(container, {
+        canvas = new Canvas(container, {
             selection: true,
             preserveObjectStacking: true,
             renderOnAddRemove: true,
@@ -348,7 +363,7 @@
                           : 0
                 );
                 if (shapeType === 'rect') {
-                    tempShape = new fabric.Rect({
+                    tempShape = new Rect({
                         left: pointer.x,
                         top: pointer.y,
                         width: 0,
@@ -366,7 +381,7 @@
                     });
                 } else {
                     // use ellipse for circle-like drawing
-                    tempShape = new fabric.Ellipse({
+                    tempShape = new Ellipse({
                         left: pointer.x,
                         top: pointer.y,
                         rx: 0,
@@ -393,9 +408,24 @@
             }
             // Arrow tool: start drawing a line
             if (activeTool === 'arrow') {
+                // if clicked on an existing object, select it instead of starting a new arrow
+                let hit = opt.target;
+                try {
+                    if (!hit && canvas && typeof (canvas as any).findTarget === 'function') {
+                        hit = (canvas as any).findTarget(opt.e);
+                    }
+                } catch (e) {}
+                if (hit) {
+                    try {
+                        canvas.setActiveObject(hit);
+                        canvas.requestRenderAll();
+                        return;
+                    } catch (e) {}
+                }
+
                 arrowStart = { x: pointer.x, y: pointer.y };
                 // create temporary line
-                const line = new fabric.Line([pointer.x, pointer.y, pointer.x, pointer.y], {
+                const line = new Line([pointer.x, pointer.y, pointer.x, pointer.y], {
                     stroke: activeToolOptions.stroke || '#ff0000',
                     strokeWidth: activeToolOptions.strokeWidth || 4,
                     selectable: false,
@@ -409,13 +439,14 @@
                     (activeToolOptions.arrowHead || 'right') === 'right' ||
                     (activeToolOptions.arrowHead || 'right') === 'both';
                 const headRight = headRightNeeded
-                    ? new fabric.Triangle({
+                    ? new Triangle({
                           left: pointer.x,
                           top: pointer.y,
                           originX: 'center',
                           originY: 'center',
                           width: Math.max(8, (activeToolOptions.strokeWidth || 4) * 2.2),
                           height: Math.max(8, (activeToolOptions.strokeWidth || 4) * 2.6),
+                          // triangle default points up; we'll rotate during move to match line direction
                           angle: 0,
                           fill: activeToolOptions.stroke || '#ff0000',
                           selectable: false,
@@ -423,13 +454,14 @@
                       })
                     : undefined;
                 const headLeft = headLeftNeeded
-                    ? new fabric.Triangle({
+                    ? new Triangle({
                           left: pointer.x,
                           top: pointer.y,
                           originX: 'center',
                           originY: 'center',
                           width: Math.max(8, (activeToolOptions.strokeWidth || 4) * 2.2),
                           height: Math.max(8, (activeToolOptions.strokeWidth || 4) * 2.6),
+                          // start rotated opposite; will be adjusted during move
                           angle: 180,
                           fill: activeToolOptions.stroke || '#ff0000',
                           selectable: false,
@@ -505,8 +537,22 @@
                     let itext: any = null;
                     // Try common fabric text classes in order of preference
                     try {
-                        if ((fabric as any).IText) {
-                            itext = new (fabric as any).IText('文字', {
+                        itext = new IText('文字', {
+                            left: pointer.x,
+                            top: pointer.y,
+                            fontFamily,
+                            fontSize,
+                            fill,
+                            selectable: true,
+                            evented: true,
+                        });
+                    } catch (e) {
+                        console.warn('CanvasEditor: IText creation failed', e);
+                        itext = null;
+                    }
+                    if (!itext) {
+                        try {
+                            itext = new Textbox('文字', {
                                 left: pointer.x,
                                 top: pointer.y,
                                 fontFamily,
@@ -515,24 +561,6 @@
                                 selectable: true,
                                 evented: true,
                             });
-                        }
-                    } catch (e) {
-                        console.warn('CanvasEditor: IText creation failed', e);
-                        itext = null;
-                    }
-                    if (!itext) {
-                        try {
-                            if ((fabric as any).Textbox) {
-                                itext = new (fabric as any).Textbox('文字', {
-                                    left: pointer.x,
-                                    top: pointer.y,
-                                    fontFamily,
-                                    fontSize,
-                                    fill,
-                                    selectable: true,
-                                    evented: true,
-                                });
-                            }
                         } catch (e) {
                             console.warn('CanvasEditor: Textbox creation failed', e);
                             itext = null;
@@ -675,7 +703,25 @@
                         },
                         type: active.type,
                     });
-                } else {
+                } else if (active.type === 'group') {
+                    // detect arrow groups and forward their style as selection options
+                    try {
+                        const parts =
+                            typeof active.getObjects === 'function' ? active.getObjects() : [];
+                        const line = parts.find((p: any) => p.type === 'line');
+                        const tri = parts.find((p: any) => p.type === 'triangle');
+                        if (line && tri) {
+                            dispatch('selection', {
+                                options: {
+                                    stroke: line.stroke,
+                                    strokeWidth: line.strokeWidth,
+                                    arrowHead: 'both',
+                                },
+                                type: 'arrow',
+                            });
+                            return;
+                        }
+                    } catch (e) {}
                     dispatch('selection', { options: null, type: active.type });
                 }
             } catch (e) {}
@@ -707,22 +753,68 @@
             // if arrow drawing in progress
             if (activeTool === 'arrow' && arrowTemp && arrowTemp.line) {
                 const ln = arrowTemp.line;
-                ln.set({ x2: pointer.x, y2: pointer.y });
-                // update triangle position and rotation to match end direction
-                const dx = pointer.x - (arrowStart.x || 0);
-                const dy = pointer.y - (arrowStart.y || 0);
-                const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
-                if (arrowTemp.headRight) {
-                    arrowTemp.headRight.set({ left: pointer.x, top: pointer.y, angle: angle });
-                }
+                const pointer = canvas.getPointer(opt.e);
+
+                // Calculate angle and direction
+                const x1 = ln.x1 || arrowStart.x || 0;
+                const y1 = ln.y1 || arrowStart.y || 0;
+                const x2 = pointer.x;
+                const y2 = pointer.y;
+
+                const dx = x2 - x1;
+                const dy = y2 - y1;
+                const angleRad = Math.atan2(dy, dx);
+                const angleDeg = (angleRad * 180) / Math.PI;
+
+                // Get arrow head dimensions
+                const headH =
+                    (arrowTemp.headRight && arrowTemp.headRight.height) ||
+                    Math.max(8, (activeToolOptions.strokeWidth || 4) * 2.6);
+
+                // For a triangle with originX/Y='center', when rotated to point along the line,
+                // we need to offset it backwards by half its height so the tip touches the endpoint
+                const headOffset = headH / 2;
+
+                // Update line endpoint - shorten it so it doesn't extend beyond the arrow tip
+                ln.set({
+                    x2: pointer.x - Math.cos(angleRad) * headOffset,
+                    y2: pointer.y - Math.sin(angleRad) * headOffset,
+                });
+
+                // For left arrow, shorten from the start
                 if (arrowTemp.headLeft) {
-                    // left head should be at start and rotated opposite
-                    arrowTemp.headLeft.set({
-                        left: arrowStart.x,
-                        top: arrowStart.y,
-                        angle: angle + 180,
+                    ln.set({
+                        x1: x1 + Math.cos(angleRad) * headOffset,
+                        y1: y1 + Math.sin(angleRad) * headOffset,
                     });
                 }
+
+                // Fabric.js triangle points up by default (angle 0 = -90° in standard coords)
+                // So we add 90° to align with the line direction
+                const fabricAngle = angleDeg + 90;
+
+                // Position right arrow head
+                // Offset backwards along the line direction by half the triangle height
+                if (arrowTemp.headRight) {
+                    arrowTemp.headRight.set({
+                        left: pointer.x - Math.cos(angleRad) * headOffset,
+                        top: pointer.y - Math.sin(angleRad) * headOffset,
+                        angle: fabricAngle,
+                    });
+                    arrowTemp.headRight.setCoords();
+                }
+
+                // Position left arrow head
+                if (arrowTemp.headLeft) {
+                    arrowTemp.headLeft.set({
+                        left: x1 + Math.cos(angleRad) * headOffset,
+                        top: y1 + Math.sin(angleRad) * headOffset,
+                        angle: fabricAngle + 180,
+                    });
+                    arrowTemp.headLeft.setCoords();
+                }
+
+                ln.setCoords();
                 canvas.requestRenderAll();
                 return;
             }
@@ -755,21 +847,92 @@
             // finish arrow
             if (activeTool === 'arrow' && arrowTemp && arrowTemp.line) {
                 try {
+                    const ln: any = arrowTemp.line;
+                    const x1 = ln.x1 || arrowStart.x || 0;
+                    const y1 = ln.y1 || arrowStart.y || 0;
+                    const x2 = ln.x2 || x1;
+                    const y2 = ln.y2 || y1;
+
+                    const dx = x2 - x1;
+                    const dy = y2 - y1;
+                    const angleRad = Math.atan2(dy, dx);
+                    const angleDeg = (angleRad * 180) / Math.PI;
+
+                    // Get arrow head dimensions
+                    const headH =
+                        (arrowTemp.headRight && arrowTemp.headRight.height) ||
+                        Math.max(8, (activeToolOptions.strokeWidth || 4) * 2.6);
+
+                    // Offset to align arrow centerline with line
+                    const headOffset = headH / 2;
+
+                    // Calculate actual endpoints (where the arrow tips should be)
+                    const actualEndX = x2 + Math.cos(angleRad) * headOffset;
+                    const actualEndY = y2 + Math.sin(angleRad) * headOffset;
+                    const actualStartX = arrowTemp.headLeft
+                        ? x1 - Math.cos(angleRad) * headOffset
+                        : x1;
+                    const actualStartY = arrowTemp.headLeft
+                        ? y1 - Math.sin(angleRad) * headOffset
+                        : y1;
+
+                    // Update line endpoints
+                    ln.set({
+                        x1:
+                            actualStartX +
+                            (arrowTemp.headLeft ? Math.cos(angleRad) * headOffset : 0),
+                        y1:
+                            actualStartY +
+                            (arrowTemp.headLeft ? Math.sin(angleRad) * headOffset : 0),
+                        x2: actualEndX - Math.cos(angleRad) * headOffset,
+                        y2: actualEndY - Math.sin(angleRad) * headOffset,
+                    });
+
+                    // Fabric.js triangle points up by default, add 90° to align with line direction
+                    const fabricAngle = angleDeg + 90;
+
+                    // Finalize arrow head positions and make them selectable
+                    if (arrowTemp.headRight) {
+                        arrowTemp.headRight.set({
+                            left: actualEndX - Math.cos(angleRad) * headOffset,
+                            top: actualEndY - Math.sin(angleRad) * headOffset,
+                            angle: fabricAngle,
+                            selectable: true,
+                            evented: true,
+                        });
+                        arrowTemp.headRight.setCoords();
+                    }
+
+                    if (arrowTemp.headLeft) {
+                        arrowTemp.headLeft.set({
+                            left: actualStartX + Math.cos(angleRad) * headOffset,
+                            top: actualStartY + Math.sin(angleRad) * headOffset,
+                            angle: fabricAngle + 180,
+                            selectable: true,
+                            evented: true,
+                        });
+                        arrowTemp.headLeft.setCoords();
+                    }
+
+                    ln.setCoords();
+
                     const parts: any[] = [];
                     arrowTemp.line.set({ selectable: true, evented: true });
                     parts.push(arrowTemp.line);
                     if (arrowTemp.headLeft) {
-                        arrowTemp.headLeft.set({ selectable: true, evented: true });
                         parts.push(arrowTemp.headLeft);
                     }
                     if (arrowTemp.headRight) {
-                        arrowTemp.headRight.set({ selectable: true, evented: true });
                         parts.push(arrowTemp.headRight);
                     }
-                    const group = new fabric.Group(parts, {
+                    const group = new Group(parts, {
                         selectable: true,
                         evented: true,
                     });
+                    // mark as arrow so we can identify and edit later
+                    try {
+                        (group as any)._isArrow = true;
+                    } catch (e) {}
                     if (arrowTemp.line) canvas.remove(arrowTemp.line);
                     if (arrowTemp.headLeft) canvas.remove(arrowTemp.headLeft);
                     if (arrowTemp.headRight) canvas.remove(arrowTemp.headRight);
@@ -908,8 +1071,7 @@
     }
 
     // Arrow drawing state
-    let arrowTemp: { line?: fabric.Line; headLeft?: fabric.Triangle; headRight?: fabric.Triangle } =
-        {};
+    let arrowTemp: { line?: Line; headLeft?: Triangle; headRight?: Triangle } = {};
     let arrowStart = { x: 0, y: 0 };
 
     // Crop mode state
@@ -945,7 +1107,7 @@
             isDrawing = true;
             startX = pointer.x;
             startY = pointer.y;
-            cropRect = new fabric.Rect({
+            cropRect = new Rect({
                 type: 'custom-crop-rect',
                 left: startX,
                 top: startY,
@@ -1161,10 +1323,10 @@
                         canvas!.clear();
                         canvas!.setWidth((imgEl as any).width || 800);
                         canvas!.setHeight((imgEl as any).height || 600);
-                        const fImg = new (fabric as any).Image(imgEl, { selectable: false });
+                        const fImg = new FabricImage(imgEl, { selectable: false });
                         fImg.set({ left: 0, top: 0, selectable: false });
-                        canvas!.setBackgroundImage(fImg, canvas!.renderAll.bind(canvas));
-                        canvas!.renderAll();
+                        (canvas as any).backgroundImage = fImg;
+                        canvas!.requestRenderAll();
 
                         // Fit image to visible canvas container height by default and center it
                         try {
@@ -1279,6 +1441,191 @@
             if (!objs || objs.length === 0) return;
             objs.forEach((o: any) => {
                 try {
+                    // allow editing arrow groups as a single object
+                    if (o.type === 'group') {
+                        try {
+                            const parts = typeof o.getObjects === 'function' ? o.getObjects() : [];
+                            const ln = parts.find((p: any) => p.type === 'line');
+                            if (!ln) return;
+
+                            // find existing triangle heads and classify to start/end
+                            let triangleParts = parts.filter((p: any) => p.type === 'triangle');
+                            const x1 = ln.x1 || 0;
+                            const y1 = ln.y1 || 0;
+                            const x2 = ln.x2 || 0;
+                            const y2 = ln.y2 || 0;
+                            const dx = x2 - x1;
+                            const dy = y2 - y1;
+                            const angleRad = Math.atan2(dy, dx);
+                            const angleDeg = (angleRad * 180) / Math.PI;
+
+                            let leftHead: any = null;
+                            let rightHead: any = null;
+                            triangleParts.forEach((h: any) => {
+                                const dToEnd = Math.hypot((h.left || 0) - x2, (h.top || 0) - y2);
+                                const dToStart = Math.hypot((h.left || 0) - x1, (h.top || 0) - y1);
+                                if (dToEnd <= dToStart) rightHead = h;
+                                else leftHead = h;
+                            });
+
+                            // desired config
+                            const desiredHead =
+                                typeof options.arrowHead !== 'undefined'
+                                    ? options.arrowHead
+                                    : triangleParts.length === 2
+                                      ? 'both'
+                                      : triangleParts.length === 1
+                                        ? rightHead
+                                            ? 'right'
+                                            : 'left'
+                                        : 'right';
+
+                            // apply visual changes
+                            if (typeof options.stroke !== 'undefined') {
+                                ln.set('stroke', options.stroke);
+                                triangleParts.forEach(
+                                    (h: any) => h.set && h.set('fill', options.stroke)
+                                );
+                            }
+                            if (typeof options.strokeWidth !== 'undefined') {
+                                ln.set('strokeWidth', options.strokeWidth);
+                                const w = Math.max(8, options.strokeWidth * 2.2);
+                                const h = Math.max(8, options.strokeWidth * 2.6);
+                                triangleParts.forEach(
+                                    (t: any) => t.set && (t.set('width', w), t.set('height', h))
+                                );
+                            }
+
+                            // helper to add triangle
+                            const addTriangle = (pos: 'start' | 'end') => {
+                                const tri = new Triangle({
+                                    left: pos === 'end' ? x2 : x1,
+                                    top: pos === 'end' ? y2 : y1,
+                                    originX: 'center',
+                                    originY: 'center',
+                                    width: Math.max(
+                                        8,
+                                        (options.strokeWidth || ln.strokeWidth || 4) * 2.2
+                                    ),
+                                    height: Math.max(
+                                        8,
+                                        (options.strokeWidth || ln.strokeWidth || 4) * 2.6
+                                    ),
+                                    angle: pos === 'end' ? angleDeg + 90 : angleDeg + 90 + 180,
+                                    fill: options.stroke || ln.stroke,
+                                    selectable: false,
+                                    evented: false,
+                                });
+                                try {
+                                    (o as any).addWithUpdate && (o as any).addWithUpdate(tri);
+                                } catch (e) {
+                                    try {
+                                        (o as any).add && (o as any).add(tri);
+                                    } catch (e) {}
+                                }
+                                return tri;
+                            };
+
+                            // reconcile heads
+                            if (desiredHead === 'both') {
+                                if (!rightHead) rightHead = addTriangle('end');
+                                if (!leftHead) leftHead = addTriangle('start');
+                            } else if (desiredHead === 'right') {
+                                if (leftHead)
+                                    try {
+                                        (o as any).remove(leftHead);
+                                        leftHead = null;
+                                    } catch (e) {}
+                                if (!rightHead) rightHead = addTriangle('end');
+                            } else if (desiredHead === 'left') {
+                                if (rightHead)
+                                    try {
+                                        (o as any).remove(rightHead);
+                                        rightHead = null;
+                                    } catch (e) {}
+                                if (!leftHead) leftHead = addTriangle('start');
+                            } else if (desiredHead === 'none') {
+                                if (leftHead)
+                                    try {
+                                        (o as any).remove(leftHead);
+                                        leftHead = null;
+                                    } catch (e) {}
+                                if (rightHead)
+                                    try {
+                                        (o as any).remove(rightHead);
+                                        rightHead = null;
+                                    } catch (e) {}
+                            }
+
+                            // refresh triangle list and reposition / shorten line
+                            triangleParts =
+                                typeof o.getObjects === 'function'
+                                    ? o.getObjects().filter((p: any) => p.type === 'triangle')
+                                    : [];
+                            if (triangleParts.length) {
+                                const x1 = ln.x1 || 0;
+                                const y1 = ln.y1 || 0;
+                                const x2 = ln.x2 || 0;
+                                const y2 = ln.y2 || 0;
+
+                                const dx = x2 - x1;
+                                const dy = y2 - y1;
+                                const angleRad = Math.atan2(dy, dx);
+                                const angleDeg = (angleRad * 180) / Math.PI;
+
+                                // Get arrow head dimensions
+                                const headH =
+                                    (triangleParts[0] && triangleParts[0].height) ||
+                                    Math.max(8, (options.strokeWidth || 4) * 2.6);
+
+                                // Offset to align arrow centerline with line
+                                const headOffset = headH / 2;
+
+                                // Fabric.js triangle points up by default, add 90° to align with line direction
+                                const fabricAngle = angleDeg + 90;
+
+                                // Position triangles at line endpoints with correct angles and offset
+                                triangleParts.forEach((h: any) => {
+                                    const dToEnd = Math.hypot(
+                                        (h.left || 0) - x2,
+                                        (h.top || 0) - y2
+                                    );
+                                    const dToStart = Math.hypot(
+                                        (h.left || 0) - x1,
+                                        (h.top || 0) - y1
+                                    );
+                                    if (dToEnd <= dToStart) {
+                                        // Right arrow head - offset backwards from endpoint
+                                        h.set({
+                                            left: x2 - Math.cos(angleRad) * headOffset,
+                                            top: y2 - Math.sin(angleRad) * headOffset,
+                                            angle: fabricAngle,
+                                        });
+                                    } else {
+                                        // Left arrow head - offset forwards from startpoint
+                                        h.set({
+                                            left: x1 + Math.cos(angleRad) * headOffset,
+                                            top: y1 + Math.sin(angleRad) * headOffset,
+                                            angle: fabricAngle + 180,
+                                        });
+                                    }
+                                    h.setCoords && h.setCoords();
+                                });
+                            } else {
+                                ln.set({ x1, y1, x2, y2 });
+                            }
+
+                            // update coords
+                            try {
+                                triangleParts.forEach((h: any) => h.setCoords && h.setCoords());
+                                ln.setCoords && ln.setCoords();
+                                o.setCoords && o.setCoords();
+                            } catch (e) {}
+
+                            return; // handled
+                        } catch (e) {}
+                    }
+
                     // text objects
                     if (['i-text', 'textbox', 'text'].includes(o.type)) {
                         if (typeof options.family !== 'undefined')
@@ -1387,18 +1734,14 @@
                     // flip horizontally around canvas center
                     const c =
                         bg.getCenterPoint?.() ||
-                        new (fabric as any).Point(
+                        new Point(
                             (bg.left || 0) + (bg.width || 0) / 2,
                             (bg.top || 0) + (bg.height || 0) / 2
                         );
                     const newCenterX = w - (c.x || 0);
                     bg.set('flipX', !bg.flipX);
                     bg.setPositionByOrigin &&
-                        bg.setPositionByOrigin(
-                            new (fabric as any).Point(newCenterX, c.y || 0),
-                            'center',
-                            'center'
-                        );
+                        bg.setPositionByOrigin(new Point(newCenterX, c.y || 0), 'center', 'center');
                     bg.setCoords && bg.setCoords();
                 }
             } catch (e) {}
@@ -1413,7 +1756,7 @@
                         const newCenterX = w - (c.x || 0);
                         o.setPositionByOrigin &&
                             o.setPositionByOrigin(
-                                new (fabric as any).Point(newCenterX, c.y || 0),
+                                new Point(newCenterX, c.y || 0),
                                 'center',
                                 'center'
                             );
@@ -1440,18 +1783,14 @@
                 if (bg) {
                     const c =
                         bg.getCenterPoint?.() ||
-                        new (fabric as any).Point(
+                        new Point(
                             (bg.left || 0) + (bg.width || 0) / 2,
                             (bg.top || 0) + (bg.height || 0) / 2
                         );
                     const newCenterY = h - (c.y || 0);
                     bg.set('flipY', !bg.flipY);
                     bg.setPositionByOrigin &&
-                        bg.setPositionByOrigin(
-                            new (fabric as any).Point(c.x || 0, newCenterY),
-                            'center',
-                            'center'
-                        );
+                        bg.setPositionByOrigin(new Point(c.x || 0, newCenterY), 'center', 'center');
                     bg.setCoords && bg.setCoords();
                 }
             } catch (e) {}
@@ -1466,7 +1805,7 @@
                         const newCenterY = h - (c.y || 0);
                         o.setPositionByOrigin &&
                             o.setPositionByOrigin(
-                                new (fabric as any).Point(c.x || 0, newCenterY),
+                                new Point(c.x || 0, newCenterY),
                                 'center',
                                 'center'
                             );
@@ -1560,8 +1899,9 @@
             }
 
             // set rotated background
-            const fImg = new (fabric as any).Image(rotImg, { selectable: false });
-            canvas.setBackgroundImage(fImg, canvas.renderAll.bind(canvas));
+            const fImg = new FabricImage(rotImg, { selectable: false });
+            (canvas as any).backgroundImage = fImg;
+            canvas.requestRenderAll();
 
             // transform each object's center and rotate its angle
             objs.forEach((o: any) => {
@@ -1577,7 +1917,7 @@
                     }
                     o.setPositionByOrigin &&
                         o.setPositionByOrigin(
-                            new (fabric as any).Point(newCenterX, newCenterY),
+                            new Point(newCenterX, newCenterY),
                             'center',
                             'center'
                         );
@@ -1599,6 +1939,7 @@
     }
 </script>
 
+```
 <div class="canvas-editor">
     <canvas bind:this={container}></canvas>
 </div>
