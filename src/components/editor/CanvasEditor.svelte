@@ -150,16 +150,36 @@
 
     // Clipboard for copy/paste
     let clipboard: any[] = [];
-    function copySelectedShapes() {
+    function copySelectedObjects() {
         try {
             if (!canvas) return;
             const objs = (canvas.getActiveObjects && canvas.getActiveObjects()) || [];
             if (!objs || objs.length === 0) return;
-            const allowed = objs.filter((o: any) => ['rect', 'ellipse', 'circle'].includes(o.type));
+
+            // Allow copy of various drawable objects
+            const allowed = objs.filter((o: any) =>
+                [
+                    'rect',
+                    'ellipse',
+                    'circle',
+                    'path',
+                    'group',
+                    'i-text',
+                    'textbox',
+                    'text',
+                    'line',
+                    'triangle',
+                ].includes(o.type)
+            );
+
             if (allowed.length === 0) return;
-            clipboard = allowed.map((o: any) => o.toObject(['selectable']));
+
+            // Include custom properties like _isArrow to ensure arrows remain editable after paste
+            // Map each object to its serialized version
+            clipboard = allowed.map((o: any) => o.toObject(['selectable', 'evented', '_isArrow']));
+
             try {
-                dispatch('copied', { count: clipboard.length });
+                dispatch('copied', { count: allowed.length });
             } catch (e) {}
         } catch (e) {}
     }
@@ -214,20 +234,31 @@
                 const enlivened = await util.enlivenObjects(clipboard);
                 if (!enlivened || enlivened.length === 0) return;
                 const added: any[] = [];
-                enlivened.forEach((o: any) => {
+                enlivened.forEach((o: any, index: number) => {
                     // offset pasted objects slightly
                     o.left = (o.left || 0) + 12;
                     o.top = (o.top || 0) + 12;
                     o.selectable = true;
                     o.evented = true;
+
+                    // Restore custom properties from clipboard data
+                    const data = clipboard[index];
+                    if (data && data._isArrow) {
+                        (o as any)._isArrow = true;
+                    }
+
                     canvas.add(o);
                     added.push(o);
                 });
                 if (added.length) {
                     canvas.discardActiveObject();
-                    if (added.length === 1) canvas.setActiveObject(added[0]);
-                    else {
-                        const group = new Group(added, { selectable: true });
+                    if (added.length === 1) {
+                        canvas.setActiveObject(added[0]);
+                    } else {
+                        const group = new Group(added, {
+                            selectable: true,
+                            evented: true,
+                        });
                         canvas.add(group);
                         canvas.setActiveObject(group);
                     }
@@ -312,7 +343,7 @@
             const key = (e.key || '').toLowerCase();
             if (key === 'c') {
                 e.preventDefault();
-                copySelectedShapes();
+                copySelectedObjects();
             } else if (key === 'v') {
                 e.preventDefault();
                 pasteClipboard();
@@ -1978,12 +2009,12 @@
         /* 棋盘格背景配置 */
         --checker-size: 20px; /* 格子大小 */
         --checker-color-1: var(--b3-theme-background); /* 颜色1 */
-        --checker-color-2: rgba(from var(--b3-theme-background-light) r g b / .3); /* 颜色2 */
-        
+        --checker-color-2: rgba(from var(--b3-theme-background-light) r g b / 0.1); /* 颜色2 */
+
         background-image: conic-gradient(
-            var(--checker-color-2) 25%, 
-            var(--checker-color-1) 0 50%, 
-            var(--checker-color-2) 0 75%, 
+            var(--checker-color-2) 25%,
+            var(--checker-color-1) 0 50%,
+            var(--checker-color-2) 0 75%,
             var(--checker-color-1) 0
         );
         background-size: var(--checker-size) var(--checker-size);
