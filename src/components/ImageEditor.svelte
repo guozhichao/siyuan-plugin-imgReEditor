@@ -1,7 +1,8 @@
 <script lang="ts">
     import { onMount, onDestroy } from 'svelte';
-    import ImageEditor from 'tui-image-editor';
-    import 'tui-image-editor/dist/tui-image-editor.css';
+    import ImageEditor from '../lib/image-editor';
+    // Style imports are now handled within the local entry point or manually if needed
+    import '../lib/image-editor/css/index.styl';
     import 'tui-color-picker/dist/tui-color-picker.css';
     import { getFileBlob, putFile } from '../api';
     import { readPNGTextChunk, insertPNGTextChunk, locatePNGtEXt } from '../utils';

@@ -16,7 +16,8 @@
     "make-install": "vite build && node --no-warnings ./scripts/make_install.js"
   },
   "dependencies": {
-    "tui-image-editor": "^3.15.3",
+    "fabric": "^4.6.0",
+    "tui-code-snippet": "^2.3.3",
     "tui-color-picker": "^2.2.8"
   },
   "devDependencies": {
@@ -31,6 +32,7 @@
     "rollup-plugin-livereload": "^2.0.5",
     "sass": "^1.63.3",
     "siyuan": "1.1.6",
+    "stylus": "^0.64.0",
     "svelte": "^4.2.19",
     "ts-node": "^10.9.1",
     "typescript": "^5.1.3",

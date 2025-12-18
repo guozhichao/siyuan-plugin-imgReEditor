@@ -24,6 +24,9 @@ export default defineConfig({
     resolve: {
         alias: {
             "@": resolve(__dirname, "src"),
+            "@editor": resolve(__dirname, "src/lib/image-editor/js"),
+            "@editor-css": resolve(__dirname, "src/lib/image-editor/css"),
+            "@editor-svg": resolve(__dirname, "src/lib/image-editor/svg"),
         }
     },
 
