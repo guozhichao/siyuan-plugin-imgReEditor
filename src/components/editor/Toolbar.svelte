@@ -70,11 +70,6 @@
     <button class="b3-button b3-button--outline" on:click={() => emit('cancel')}>取消</button>
 
     <style>
-        .editor-toolbar button.active {
-            background: #e9f2ff;
-            border: 1px solid #bcd8ff;
-            box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.02);
-        }
     </style>
 </div>
 
