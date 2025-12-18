@@ -1208,6 +1208,11 @@
     }
 
     export function setTool(tool: string | null, options: any = {}) {
+        // If we were in crop mode and switching to another tool, exit it properly
+        if (cropMode && tool !== 'crop' && tool !== null) {
+            exitCropMode();
+        }
+
         activeTool = tool;
         activeToolOptions = options || {};
 
@@ -1331,9 +1336,15 @@
         originalSize?: { width: number; height: number }
     ) {
         if (!canvas) return;
-        if (cropMode) return;
+        if (cropMode && cropRect) return;
         cropMode = true;
         cropRestoreData = null;
+
+        // Ensure no existing cropRect
+        if (cropRect) {
+            canvas.remove(cropRect);
+            cropRect = null;
+        }
 
         // Deselect all objects
         try {
@@ -1725,6 +1736,11 @@
 
     export function exitCropMode() {
         if (!canvas || !cropMode) return;
+        // Notify parent that crop mode is finished (cancelled or exited)
+        // so it can update the toolbar selection state.
+        dispatch('cropCancel');
+
+
         // remove handlers
         if (_cropHandlers) {
             try {
@@ -1747,9 +1763,9 @@
         try {
             if (cropRect) {
                 canvas.remove(cropRect);
-                cropRect = null;
             }
         } catch (e) {}
+        cropRect = null;
 
         cropRestoreData = null;
         fitImageToViewport();
@@ -1759,6 +1775,11 @@
         } catch (e) {}
         _cropKeyHandler = null;
 
+        // Ensure the crop tool is deselected in the UI when exiting crop mode
+        try {
+            setTool(null);
+        } catch (e) {}
+        dispatch('cropApplied', null );
         canvas.getObjects().forEach((obj: any) => {
             obj.selectable = true;
             obj.evented = true;
@@ -2400,7 +2421,6 @@
             setTimeout(() => {
                 fitImageToViewport();
             }, 100);
-
 
             // Reset history to treat this state as initial
             pushInitialHistory();

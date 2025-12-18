@@ -507,7 +507,6 @@
                                 width: e.detail.width,
                                 height: e.detail.height,
                             };
-                            
                         }
                     }
 
@@ -570,6 +569,9 @@
                     } catch (err) {
                         console.warn('cropApplied handler failed', err);
                     }
+                }}
+                on:cropCancel={() => {
+                    activeTool = null;
                 }}
                 on:selection={e => {
                     try {
