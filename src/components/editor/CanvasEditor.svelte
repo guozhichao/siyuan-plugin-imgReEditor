@@ -68,6 +68,21 @@
                 } else {
                     obj.selectable = true;
                     obj.evented = true;
+                    // Ensure text objects only scale proportionally and have correct effective font size
+                    if (['i-text', 'textbox', 'text'].includes(obj.type)) {
+                        obj.set('lockUniScaling', true);
+                        if (obj.scaleX !== 1 || obj.scaleY !== 1) {
+                            const newFontSize = Math.round(obj.fontSize * obj.scaleX);
+                            obj.set({
+                                fontSize: newFontSize,
+                                scaleX: 1,
+                                scaleY: 1,
+                            });
+                            if (obj.type === 'textbox') {
+                                obj.set('width', obj.width * obj.scaleX);
+                            }
+                        }
+                    }
                 }
                 obj.setCoords();
             });
@@ -360,7 +375,32 @@
 
         // Attach basic history listeners (use typed scheduling for merging)
         canvas.on('object:added', () => schedulePushWithType('added'));
-        canvas.on('object:modified', () => schedulePushWithType('modified'));
+        canvas.on('object:modified', (opt: any) => {
+            const target = opt.target;
+            if (target && ['i-text', 'textbox', 'text'].includes(target.type)) {
+                if (target.scaleX !== 1 || target.scaleY !== 1) {
+                    const newFontSize = Math.round(target.fontSize * target.scaleX);
+                    // Use set to update properties and reset scale
+                    target.set({
+                        fontSize: newFontSize,
+                        scaleX: 1,
+                        scaleY: 1,
+                    });
+                    // For Textbox, we might need to adjust width as well to maintain the visual layout
+                    if (target.type === 'textbox') {
+                        target.set('width', target.width * target.scaleX);
+                    }
+                    target.setCoords();
+
+                    // Update tool options so UI stays in sync
+                    if (activeTool === 'text') {
+                        activeToolOptions.size = newFontSize;
+                    }
+                    handleSelectionChangeWithType();
+                }
+            }
+            schedulePushWithType('modified');
+        });
         canvas.on('object:removed', () => schedulePushWithType('removed'));
 
         // Handle path creation (for brush)
@@ -708,6 +748,7 @@
                             selectable: true,
                             evented: true,
                             erasable: true,
+                            lockUniScaling: true,
                         });
                     } catch (e) {
                         console.warn('CanvasEditor: IText creation failed', e);
@@ -728,6 +769,7 @@
                                 selectable: true,
                                 evented: true,
                                 erasable: true,
+                                lockUniScaling: true,
                             });
                         } catch (e) {
                             console.warn('CanvasEditor: Textbox creation failed', e);
@@ -749,6 +791,7 @@
                                 selectable: true,
                                 evented: true,
                                 erasable: true,
+                                lockUniScaling: true,
                             });
                         } catch (e) {
                             console.error('CanvasEditor: Text creation failed', e);
@@ -937,7 +980,7 @@
                     dispatch('selection', {
                         options: {
                             family: (active as any).fontFamily,
-                            size: (active as any).fontSize,
+                            size: Math.round((active as any).fontSize * (active.scaleX || 1)),
                             fill: active.fill,
                             stroke: active.stroke,
                             strokeWidth: active.strokeWidth,
@@ -974,6 +1017,23 @@
         canvas.on('selection:created', handleSelectionChangeWithType);
         canvas.on('selection:updated', handleSelectionChangeWithType);
         canvas.on('selection:cleared', handleSelectionChangeWithType);
+
+        // Real-time font size calculation during scaling
+        canvas.on('object:scaling', (opt: any) => {
+            const target = opt.target;
+            if (target && ['i-text', 'textbox', 'text'].includes(target.type)) {
+                // Update size in the tool options for real-time UI feel
+                if (activeTool === 'text') {
+                    const effectiveSize = Math.round(target.fontSize * target.scaleX);
+                    activeToolOptions.size = effectiveSize;
+                    // Only dispatch if necessary to avoid flooding
+                    dispatch('selection', {
+                        options: { ...activeToolOptions, size: effectiveSize },
+                        type: target.type,
+                    });
+                }
+            }
+        });
         canvas.on('mouse:move', opt => {
             const pointer = canvas.getPointer(opt.e);
 
