@@ -509,14 +509,9 @@
                         }
                     }
 
-                    // If there is saved editor data from prior read, restore it
                     if (savedEditorData && savedEditorData.canvasJSON && canvasEditorRef) {
                         console.log('Attempting to restore saved editor data...');
                         try {
-                            console.log(
-                                'Calling canvasEditorRef.fromJSON with:',
-                                savedEditorData.canvasJSON
-                            );
                             canvasEditorRef.fromJSON(savedEditorData.canvasJSON);
                             if (savedEditorData.cropData) {
                                 cropData = savedEditorData.cropData;
@@ -525,57 +520,6 @@
                             if (savedEditorData.originalImageDimensions) {
                                 originalImageDimensions = savedEditorData.originalImageDimensions;
                             }
-
-                            // After loadFromJSON completes, adjust canvas/background to show the cropped region
-                            setTimeout(() => {
-                                try {
-                                    const canvas = canvasEditorRef.getCanvas();
-                                    if (!canvas) return;
-
-                                    if (isCropped && cropData) {
-                                        canvas.setWidth(cropData.width);
-                                        canvas.setHeight(cropData.height);
-
-                                        // Adjust background to show crop area
-                                        if (canvas.backgroundImage) {
-                                            const bg = canvas.backgroundImage;
-                                            bg.left = -cropData.left;
-                                            bg.top = -cropData.top;
-                                            bg.setCoords();
-                                        }
-
-                                        // Adjust DOM sizes for Fabric canvas
-                                        if (
-                                            canvas.lowerCanvasEl &&
-                                            canvas.lowerCanvasEl.parentElement
-                                        ) {
-                                            const lower = canvas.lowerCanvasEl;
-                                            lower.style.width = `${cropData.width}px`;
-                                            lower.style.height = `${cropData.height}px`;
-                                            lower.parentElement.style.width = `${cropData.width}px`;
-                                            lower.parentElement.style.height = `${cropData.height}px`;
-                                        }
-
-                                        canvas.requestRenderAll();
-                                    } else if (originalImageDimensions.width > 0) {
-                                        canvas.setWidth(originalImageDimensions.width);
-                                        canvas.setHeight(originalImageDimensions.height);
-                                        if (
-                                            canvas.lowerCanvasEl &&
-                                            canvas.lowerCanvasEl.parentElement
-                                        ) {
-                                            const lower = canvas.lowerCanvasEl;
-                                            lower.style.width = `${originalImageDimensions.width}px`;
-                                            lower.style.height = `${originalImageDimensions.height}px`;
-                                            lower.parentElement.style.width = `${originalImageDimensions.width}px`;
-                                            lower.parentElement.style.height = `${originalImageDimensions.height}px`;
-                                        }
-                                        canvas.requestRenderAll();
-                                    }
-                                } catch (e) {
-                                    console.warn('Failed to adjust canvas after restore', e);
-                                }
-                            }, 100);
                         } catch (e) {
                             console.warn('Failed to restore canvas JSON to CanvasEditor', e);
                         }
@@ -737,7 +681,7 @@
         flex: 1 1 auto;
         min-width: 0; /* allow shrinking to prevent overflow/scrollbars */
         height: 100%;
-        overflow: auto; /* allow scroll only if image is larger than container */
+        overflow: hidden; /* no internal scrollbars, use Fabric panning/zooming */
     }
 
     .tool-popup {

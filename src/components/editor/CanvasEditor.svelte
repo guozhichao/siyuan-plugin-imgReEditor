@@ -1214,13 +1214,6 @@
                 // set canvas size
                 canvas.setWidth(cwidth);
                 canvas.setHeight(cheight);
-                if (canvas.lowerCanvasEl && canvas.lowerCanvasEl.parentElement) {
-                    const lower = canvas.lowerCanvasEl;
-                    lower.style.width = `${cwidth}px`;
-                    lower.style.height = `${cheight}px`;
-                    lower.parentElement.style.width = `${cwidth}px`;
-                    lower.parentElement.style.height = `${cheight}px`;
-                }
 
                 // reset viewport transform
                 canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
@@ -1338,38 +1331,26 @@
                     try {
                         // reset canvas
                         canvas!.clear();
-                        canvas!.setWidth((imgEl as any).width || 800);
-                        canvas!.setHeight((imgEl as any).height || 600);
+                        const imgW = (imgEl as any).width || 800;
+                        const imgH = (imgEl as any).height || 600;
+
+                        // Get the workspace container size
+                        const workspace = container.closest('.canvas-editor');
+                        const cw = workspace ? workspace.clientWidth : imgW;
+                        const ch = workspace ? workspace.clientHeight : imgH;
+
+                        // Set canvas to workspace size (avoids scrollbars)
+                        canvas!.setWidth(cw);
+                        canvas!.setHeight(ch);
+
                         const fImg = new FabricImage(imgEl, { selectable: false });
                         fImg.set({ left: 0, top: 0, selectable: false });
                         (canvas as any).backgroundImage = fImg;
+
                         canvas!.requestRenderAll();
 
-                        // Fit image to visible canvas container height by default and center it
-                        try {
-                            const lower = canvas!.lowerCanvasEl;
-                            const containerEl =
-                                lower && lower.parentElement
-                                    ? (lower.parentElement as HTMLElement)
-                                    : null;
-                            const rect = containerEl ? containerEl.getBoundingClientRect() : null;
-                            const containerH = rect
-                                ? rect.height
-                                : Math.min(window.innerHeight, imgEl.height);
-                            const containerW = rect
-                                ? rect.width
-                                : Math.min(window.innerWidth, imgEl.width);
-                            if (imgEl.height && containerH) {
-                                const scale = containerH / imgEl.height;
-                                // center the scaled image inside the visible area
-                                const tx = Math.round((containerW - imgEl.width * scale) / 2);
-                                const ty = Math.round((containerH - imgEl.height * scale) / 2);
-                                canvas!.setZoom(scale);
-                                // apply translation so the image is centered
-                                canvas!.setViewportTransform([scale, 0, 0, scale, tx, ty]);
-                                canvas!.requestRenderAll();
-                            }
-                        } catch (e) {}
+                        // Fit image to workspace
+                        fitImageToViewport();
 
                         dispatch('loaded', { width: imgEl.width, height: imgEl.height, name });
                         // Mark image as loaded to prevent duplicate loads from reactive statement
@@ -1407,6 +1388,33 @@
                 reject(e);
             }
         });
+    }
+
+    export function fitImageToViewport() {
+        if (!canvas) return;
+        const bg = canvas.backgroundImage;
+        if (!bg) return;
+
+        const workspace = container.closest('.canvas-editor');
+        if (!workspace) return;
+
+        const cw = workspace.clientWidth;
+        const ch = workspace.clientHeight;
+        const imgW = (bg.width || 0) * (bg.scaleX || 1);
+        const imgH = (bg.height || 0) * (bg.scaleY || 1);
+
+        if (imgW <= 0 || imgH <= 0) return;
+
+        // Set canvas buffer size to match workspace
+        canvas.setDimensions({ width: cw, height: ch });
+
+        // Calculate fit scale and center offset
+        const scale = Math.min(cw / imgW, ch / imgH, 1);
+        const tx = (cw - imgW * scale) / 2;
+        const ty = (ch - imgH * scale) / 2;
+
+        canvas.setViewportTransform([scale, 0, 0, scale, tx, ty]);
+        canvas.requestRenderAll();
     }
 
     function pushInitialHistory() {
@@ -1675,26 +1683,31 @@
     export function toDataURL(
         options: { format?: string; quality?: number } = { format: 'png', quality: 1 }
     ) {
-        if (!canvas) return null;
+        if (!canvas || !canvas.backgroundImage) return null;
 
-        // Save current viewport transform
+        const bg = canvas.backgroundImage;
+        const imgW = (bg.width || 0) * (bg.scaleX || 1);
+        const imgH = (bg.height || 0) * (bg.scaleY || 1);
+
+        // Save current state
         const currentVPT = canvas.viewportTransform ? [...canvas.viewportTransform] : null;
+        const currentW = canvas.getWidth();
+        const currentH = canvas.getHeight();
 
         try {
-            // Reset viewport transform to export at original size without zoom/pan
+            // Resize to original image dimensions for export
+            canvas.setDimensions({ width: imgW, height: imgH });
             canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
             canvas.renderAll();
 
             // Export the canvas at original dimensions
             const dataURL = canvas.toDataURL(options);
-
             return dataURL;
         } finally {
-            // Restore original viewport transform
-            if (currentVPT) {
-                canvas.setViewportTransform(currentVPT);
-                canvas.renderAll();
-            }
+            // Restore workspace state
+            canvas.setDimensions({ width: currentW, height: currentH });
+            if (currentVPT) canvas.setViewportTransform(currentVPT);
+            canvas.renderAll();
         }
     }
 
@@ -1736,7 +1749,11 @@
                 console.warn('Failed to restore object selectability', e);
             }
             canvas!.renderAll();
-            console.log('fromJSON completed, canvas rendered');
+            // Automatically fit to viewport after loading JSON
+            setTimeout(() => {
+                fitImageToViewport();
+            }, 10);
+            console.log('fromJSON completed, canvas rendered and fitted');
         });
     }
 
@@ -1908,13 +1925,6 @@
             // set canvas new size
             canvas.setWidth(H);
             canvas.setHeight(W);
-            if (canvas.lowerCanvasEl && canvas.lowerCanvasEl.parentElement) {
-                const lower = canvas.lowerCanvasEl;
-                lower.style.width = `${H}px`;
-                lower.style.height = `${W}px`;
-                lower.parentElement.style.width = `${H}px`;
-                lower.parentElement.style.height = `${W}px`;
-            }
 
             // set rotated background
             const fImg = new FabricImage(rotImg, { selectable: false });
@@ -1966,10 +1976,13 @@
     .canvas-editor {
         width: 100%;
         height: 100%;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background-color: var(--b3-theme-background-light, #f5f5f5);
     }
     canvas {
         display: block;
-        width: 100%;
-        height: 100%;
     }
 </style>
