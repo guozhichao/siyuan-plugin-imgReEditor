@@ -40,16 +40,21 @@ export default class PluginSample extends Plugin {
     }
 
     async onunload() {
-        //当插件被禁用的时候，会自动调用这个函数
-        console.log("onunload");
-        if (this._openMenuImageHandler) {
-            this.eventBus.off('open-menu-image', this._openMenuImageHandler);
+        // 移除所有已注册的事件监听
+        try {
+            if (this._openMenuImageHandler) {
+                this.eventBus.off('open-menu-image', this._openMenuImageHandler);
+                this._openMenuImageHandler = null;
+            }
+        } catch (e) {
+            console.warn('Error while removing event listeners during unload', e);
         }
     }
 
-    uninstall() {
-        //当插件被卸载的时候，会自动调用这个函数
-        console.log("uninstall");
+    async uninstall() {
+        await this.onunload();
+        // 删除设置文件
+        await this.removeData(SETTINGS_FILE);
     }
 
     /**
