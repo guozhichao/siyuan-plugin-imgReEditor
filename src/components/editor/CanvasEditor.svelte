@@ -408,6 +408,17 @@
                 return;
             }
 
+            // Handle Escape key
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                e.stopPropagation();
+                if (canvas) {
+                    canvas.discardActiveObject();
+                    canvas.requestRenderAll();
+                }
+                return;
+            }
+
             const ctrl = e.ctrlKey || e.metaKey;
             if (!ctrl) return;
             const key = (e.key || '').toLowerCase();
@@ -1560,45 +1571,7 @@
 
         // keyboard shortcuts for crop
         _cropKeyHandler = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') {
-                // cancel
-                try {
-                    if (cropRect) {
-                        canvas.remove(cropRect);
-                        cropRect = null;
-                    }
-                } catch (err) {}
-
-                // If we restored the view, we must undo that (revert to previous cropped state)
-                if (cropRestoreData) {
-                    try {
-                        const { left, top, finalWidth, finalHeight } = cropRestoreData;
-                        // Shift back
-                        canvas.getObjects().forEach((obj: any) => {
-                            obj.left = (obj.left || 0) - left;
-                            obj.top = (obj.top || 0) - top;
-                            obj.setCoords();
-                        });
-                        if (canvas.backgroundImage) {
-                            const bg = canvas.backgroundImage;
-                            bg.left = (bg.left || 0) - left;
-                            bg.top = (bg.top || 0) - top;
-                            bg.setCoords();
-                        }
-                    } catch (e) {
-                        console.warn('Failed to revert crop restore', e);
-                    }
-                }
-
-                cropMode = false;
-                cropRestoreData = null;
-
-                canvas.getObjects().forEach((obj: any) => {
-                    obj.selectable = true;
-                    obj.evented = true;
-                });
-                canvas.requestRenderAll();
-            } else if (e.key === 'Enter') {
+            if (e.key === 'Enter') {
                 // finalize
                 applyCrop();
             } else if (e.key === 'Delete' || e.key === 'Backspace') {
