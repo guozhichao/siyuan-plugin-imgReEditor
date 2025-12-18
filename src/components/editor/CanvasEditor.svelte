@@ -1417,6 +1417,67 @@
         } catch (e) {}
     }
 
+    function createArrowGroup(startX: number, startY: number, endX: number, endY: number, options: any) {
+        const dx = endX - startX;
+        const dy = endY - startY;
+        const angleRad = Math.atan2(dy, dx);
+        const angleDeg = (angleRad * 180) / Math.PI;
+        const headH = Math.max(8, (options.strokeWidth || 4) * 2.6);
+        const headOffset = headH / 2;
+
+        // Shorten line for arrow heads
+        const lineEndX = endX - Math.cos(angleRad) * headOffset;
+        const lineEndY = endY - Math.sin(angleRad) * headOffset;
+        const lineStartX = startX + ((options.arrowHead === 'left' || options.arrowHead === 'both') ? Math.cos(angleRad) * headOffset : 0);
+        const lineStartY = startY + ((options.arrowHead === 'left' || options.arrowHead === 'both') ? Math.sin(angleRad) * headOffset : 0);
+
+        const line = new Line([lineStartX, lineStartY, lineEndX, lineEndY], {
+            stroke: options.stroke || '#ff0000',
+            strokeWidth: options.strokeWidth || 4,
+            selectable: false,
+            evented: false,
+        });
+
+        const fabricAngle = angleDeg + 90;
+
+        const headRight = (options.arrowHead === 'right' || options.arrowHead === 'both') ? new Triangle({
+            left: endX,
+            top: endY,
+            originX: 'center',
+            originY: 'center',
+            width: Math.max(8, (options.strokeWidth || 4) * 2.2),
+            height: headH,
+            angle: fabricAngle,
+            fill: options.stroke || '#ff0000',
+            selectable: false,
+            evented: false,
+        }) : undefined;
+
+        const headLeft = (options.arrowHead === 'left' || options.arrowHead === 'both') ? new Triangle({
+            left: startX,
+            top: startY,
+            originX: 'center',
+            originY: 'center',
+            width: Math.max(8, (options.strokeWidth || 4) * 2.2),
+            height: headH,
+            angle: fabricAngle + 180,
+            fill: options.stroke || '#ff0000',
+            selectable: false,
+            evented: false,
+        }) : undefined;
+
+        const parts: any[] = [line];
+        if (headLeft) parts.push(headLeft);
+        if (headRight) parts.push(headRight);
+
+        const group = new Group(parts, {
+            selectable: true,
+            evented: true,
+        });
+        (group as any)._isArrow = true;
+        return group;
+    }
+
     export function undo() {
         try {
             if (!canvas) return;
@@ -1456,222 +1517,85 @@
                 try {
                     // allow editing arrow groups as a single object
                     if (o.type === 'group') {
-                        try {
-                            const parts = typeof o.getObjects === 'function' ? o.getObjects() : [];
-                            const ln: any = parts.find((p: any) => p.type === 'line');
-                            if (!ln) return;
+                        if (!(o as any)._isArrow) return; // not an arrow
+                        const parts = typeof o.getObjects === 'function' ? o.getObjects() : [];
+                        const ln: any = parts.find((p: any) => p.type === 'line');
+                        if (!ln) return;
+                        const triangleParts = parts.filter((p: any) => p.type === 'triangle');
 
-                            const triangleParts = parts.filter((p: any) => p.type === 'triangle');
+                        // Extract current options
+                        const currentStroke = ln.stroke;
+                        const currentStrokeWidth = ln.strokeWidth;
 
-                            // Get direction of line to identify heads
-                            // Use x1/y1 relative to line center or use triangle positions as more stable anchors
-                            const ldx = ln.x2 - ln.x1;
-                            const ldy = ln.y2 - ln.y1;
-                            const llen = Math.hypot(ldx, ldy) || 0.01;
-                            const ux = ldx / llen;
-                            const uy = ldy / llen;
+                        // Determine left and right heads
+                        const ldx = ln.x2 - ln.x1;
+                        const ldy = ln.y2 - ln.y1;
+                        const llen = Math.hypot(ldx, ldy) || 0.01;
+                        const ux = ldx / llen;
+                        const uy = ldy / llen;
 
-                            let leftHead: any = null;
-                            let rightHead: any = null;
-                            triangleParts.forEach((h: any) => {
-                                // h.left/top are relative to group center
-                                // ln.left/top are relative to group center
-                                // We need to know if this triangle is at the start or end of the line
-                                const hdx = h.left - (ln.left + (ln.x1 + ln.x2) / 2);
-                                const hdy = h.top - (ln.top + (ln.y1 + ln.y2) / 2);
-                                const dot = hdx * ldx + hdy * ldy;
-                                if (dot > 0) rightHead = h;
-                                else leftHead = h;
-                            });
+                        let leftHead: any = null;
+                        let rightHead: any = null;
+                        triangleParts.forEach((h: any) => {
+                            const hdx = h.left - (ln.left + (ln.x1 + ln.x2) / 2);
+                            const hdy = h.top - (ln.top + (ln.y1 + ln.y2) / 2);
+                            const dot = hdx * ldx + hdy * ldy;
+                            if (dot > 0) rightHead = h;
+                            else leftHead = h;
+                        });
 
-                            // Recover the real tips in relative coordinates (relative to group center)
-                            // A Line in Fabric v6 has x1,y1,x2,y2 which are relative to its own object origin.
-                            // If we set left:0, top:0, originX:left, originY:top, then x1,y1 are the coords.
-                            const oldStrokeWidth = ln.strokeWidth || 4;
-                            const oldHeadOffset = Math.max(8, oldStrokeWidth * 2.6) / 2;
+                        const currentArrowHead = leftHead && rightHead ? 'both' : rightHead ? 'right' : leftHead ? 'left' : 'none';
 
-                            // Current actual relative endpoints of the line part
+                        // Check if only color change
+                        const onlyColorChange = typeof options.stroke !== 'undefined' && Object.keys(options).length === 1;
+
+                        if (onlyColorChange) {
+                            // Update color only
+                            ln.set('stroke', options.stroke);
+                            triangleParts.forEach((h: any) => h.set('fill', options.stroke));
+                        } else {
+                            // Recreate the arrow
+                            // Calculate tip positions
+                            const oldHeadOffset = Math.max(8, currentStrokeWidth * 2.6) / 2;
+
                             const curRelX1 = ln.left + ln.x1;
                             const curRelY1 = ln.top + ln.y1;
                             const curRelX2 = ln.left + ln.x2;
                             const curRelY2 = ln.top + ln.y2;
 
-                            // The invariant points are the TIPS of the arrow
                             const tipStartX = curRelX1 - (leftHead ? ux * oldHeadOffset : 0);
                             const tipStartY = curRelY1 - (leftHead ? uy * oldHeadOffset : 0);
                             const tipEndX = curRelX2 + (rightHead ? ux * oldHeadOffset : 0);
                             const tipEndY = curRelY2 + (rightHead ? uy * oldHeadOffset : 0);
 
-                            // Angle based on real tips
-                            const realAngleDeg =
-                                (Math.atan2(tipEndY - tipStartY, tipEndX - tipStartX) * 180) /
-                                Math.PI;
-                            const fabricAngle = realAngleDeg + 90;
+                            // Get group center to position new group
+                            const groupCenter = o.getCenterPoint();
 
-                            // Determine desired configuration
-                            const currentHeadType =
-                                leftHead && rightHead
-                                    ? 'both'
-                                    : rightHead
-                                      ? 'right'
-                                      : leftHead
-                                        ? 'left'
-                                        : 'none';
-                            const desiredHead =
-                                typeof options.arrowHead !== 'undefined'
-                                    ? options.arrowHead
-                                    : currentHeadType;
+                            // Remove old group
+                            canvas.remove(o);
 
-                            // Apply color and width
-                            const newStrokeWidth =
-                                typeof options.strokeWidth !== 'undefined'
-                                    ? options.strokeWidth
-                                    : oldStrokeWidth;
-                            const newHeadWidth = Math.max(8, newStrokeWidth * 2.2);
-                            const newHeadHeight = Math.max(8, newStrokeWidth * 2.6);
-                            const newHeadOffset = newHeadHeight / 2;
-
-                            if (typeof options.stroke !== 'undefined') {
-                                ln.set('stroke', options.stroke);
-                                triangleParts.forEach(
-                                    (h: any) => h.set && h.set('fill', options.stroke)
-                                );
-                            }
-                            if (typeof options.strokeWidth !== 'undefined') {
-                                ln.set('strokeWidth', newStrokeWidth);
-                                triangleParts.forEach(
-                                    (t: any) =>
-                                        t.set &&
-                                        (t.set('width', newHeadWidth),
-                                        t.set('height', newHeadHeight))
-                                );
-                            }
-
-                            // Reconcile heads
-                            const addTriangle = (pos: 'start' | 'end') => {
-                                const targetX = pos === 'end' ? tipEndX : tipStartX;
-                                const targetY = pos === 'end' ? tipEndY : tipStartY;
-                                const tri = new Triangle({
-                                    left: targetX,
-                                    top: targetY,
-                                    originX: 'center',
-                                    originY: 'center',
-                                    width: newHeadWidth,
-                                    height: newHeadHeight,
-                                    angle:
-                                        pos === 'end' ? realAngleDeg + 90 : realAngleDeg + 90 + 180,
-                                    fill: options.stroke || ln.stroke,
-                                    selectable: false,
-                                    evented: false,
-                                });
-                                (o as any).add(tri);
-                                return tri;
+                            // Create new options
+                            const newOptions = {
+                                stroke: options.stroke !== undefined ? options.stroke : currentStroke,
+                                strokeWidth: options.strokeWidth !== undefined ? options.strokeWidth : currentStrokeWidth,
+                                arrowHead: options.arrowHead !== undefined ? options.arrowHead : currentArrowHead,
                             };
 
-                            if (desiredHead === 'both') {
-                                if (!rightHead) rightHead = addTriangle('end');
-                                if (!leftHead) leftHead = addTriangle('start');
-                            } else if (desiredHead === 'right') {
-                                if (leftHead) {
-                                    try {
-                                        (o as any).remove(leftHead);
-                                        leftHead = null;
-                                    } catch (e) {}
-                                }
-                                if (!rightHead) rightHead = addTriangle('end');
-                            } else if (desiredHead === 'left') {
-                                if (rightHead) {
-                                    try {
-                                        (o as any).remove(rightHead);
-                                        rightHead = null;
-                                    } catch (e) {}
-                                }
-                                if (!leftHead) leftHead = addTriangle('start');
-                            } else if (desiredHead === 'none') {
-                                if (leftHead) {
-                                    try {
-                                        (o as any).remove(leftHead);
-                                        leftHead = null;
-                                    } catch (e) {}
-                                }
-                                if (rightHead) {
-                                    try {
-                                        (o as any).remove(rightHead);
-                                        rightHead = null;
-                                    } catch (e) {}
-                                }
-                            }
+                            // Create new group
+                            const newGroup = createArrowGroup(tipStartX, tipStartY, tipEndX, tipEndY, newOptions);
 
-                            // Calculate final line endpoints in group-relative space
-                            const finalRelX1 = tipStartX + (leftHead ? ux * newHeadOffset : 0);
-                            const finalRelY1 = tipStartY + (leftHead ? uy * newHeadOffset : 0);
-                            const finalRelX2 = tipEndX - (rightHead ? ux * newHeadOffset : 0);
-                            const finalRelY2 = tipEndY - (rightHead ? uy * newHeadOffset : 0);
-
-                            // Update line with stable origin to avoid cumulative drift
-                            ln.set({
-                                x1: finalRelX1,
-                                y1: finalRelY1,
-                                x2: finalRelX2,
-                                y2: finalRelY2,
-                                left: 0,
-                                top: 0,
-                                originX: 'left',
-                                originY: 'top',
+                            // Position the new group at the same center
+                            const newCenter = newGroup.getCenterPoint();
+                            newGroup.set({
+                                left: groupCenter.x - (newCenter.x - newGroup.left),
+                                top: groupCenter.y - (newCenter.y - newGroup.top),
                             });
 
-                            if (leftHead) {
-                                leftHead.set({
-                                    left: finalRelX1,
-                                    top: finalRelY1,
-                                    angle: fabricAngle + 180,
-                                });
-                                leftHead.setCoords();
-                            }
-                            if (rightHead) {
-                                rightHead.set({
-                                    left: finalRelX2,
-                                    top: finalRelY2,
-                                    angle: fabricAngle,
-                                });
-                                rightHead.setCoords();
-                            }
-
-                            ln.setCoords();
-
-                            // Refine group bounds and COMPENSATE for center shift to prevent drift on canvas
-                            const oldCenter = o.getCenterPoint
-                                ? o.getCenterPoint()
-                                : new Point(o.left, o.top);
-
-                            // Fabric v6 approach to refresh layout
-                            if (typeof (o as any).triggerLayout === 'function') {
-                                (o as any).triggerLayout();
-                            } else if (typeof (o as any)._calcBounds === 'function') {
-                                (o as any)._calcBounds(true);
-                            } else if (typeof (o as any).addWithUpdate === 'function') {
-                                (o as any).addWithUpdate();
-                            }
-
-                            const newCenter = o.getCenterPoint
-                                ? o.getCenterPoint()
-                                : new Point(o.left, o.top);
-
-                            // Compensate for shift
-                            if (oldCenter && newCenter) {
-                                o.set({
-                                    left: o.left - (newCenter.x - oldCenter.x),
-                                    top: o.top - (newCenter.y - oldCenter.y),
-                                });
-                            }
-
-                            o.setCoords();
-                            o.set('dirty', true);
-
-                            return; // Handled
-                        } catch (e) {
-                            console.error('CanvasEditor: failed to update arrow group', e);
+                            canvas.add(newGroup);
+                            canvas.setActiveObject(newGroup);
                         }
+
+                        return; // handled
                     }
 
                     // text objects
