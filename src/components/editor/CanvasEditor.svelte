@@ -1232,8 +1232,6 @@
         // If we are re-cropping, restore the full canvas view
         if (restoreCrop && originalSize) {
             try {
-
-
                 const { left, top } = restoreCrop;
 
                 // Clear clipPath to reveal full image
@@ -1568,7 +1566,6 @@
                             bg.top = (bg.top || 0) - top;
                             bg.setCoords();
                         }
- 
                     } catch (e) {
                         console.warn('Failed to revert crop restore', e);
                     }
