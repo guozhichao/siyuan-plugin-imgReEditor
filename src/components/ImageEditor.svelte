@@ -571,6 +571,8 @@
                     try {
                         cropData = e.detail?.cropData || null;
                         isCropped = !!cropData;
+                        // Deactivate crop tool button after crop
+                        activeTool = null;
                     } catch (err) {
                         console.warn('cropApplied handler failed', err);
                     }
