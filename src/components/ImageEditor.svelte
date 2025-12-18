@@ -398,7 +398,7 @@
             const t = e.detail.tool;
             activeTool = t;
             // show popup for tools that have a submenu
-            const hasSubmenu = ['shape', 'arrow', 'brush'].includes(t);
+            const hasSubmenu = ['shape', 'arrow', 'brush', 'text'].includes(t);
             showToolPopup = hasSubmenu;
             if (canvasEditorRef && typeof canvasEditorRef.setTool === 'function') {
                 if (t === 'shape') {
@@ -604,6 +604,18 @@
                                         typeof canvasEditorRef.setTool === 'function'
                                     )
                                         canvasEditorRef.setTool('shape', { shape: activeShape });
+                                } catch (err) {}
+                            } else if (type === 'i-text' || type === 'textbox' || type === 'text') {
+                                // auto-open text settings when a text object is selected
+                                activeTool = 'text';
+                                showToolPopup = true;
+                                toolSettings = e.detail.options || {};
+                                try {
+                                    if (
+                                        canvasEditorRef &&
+                                        typeof canvasEditorRef.setTool === 'function'
+                                    )
+                                        canvasEditorRef.setTool('text', toolSettings);
                                 } catch (err) {}
                             } else {
                                 /* don't auto-open for other types */

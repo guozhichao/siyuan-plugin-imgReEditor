@@ -21,7 +21,8 @@
     <button class:active={active === 'shape' && activeShape === 'circle'} on:click={() => emit('tool', { tool: 'shape', shape: 'circle' })}>圆形</button>
   </div>
   <button class:active={active === 'arrow'} on:click={() => emit('tool', { tool: 'arrow' })}>箭头</button>
-  <button class:active={active === 'brush'} on:click={() => emit('tool', { tool: 'brush' })}>画笔</button>
+  <button class:active={active === 'text'} on:click={() => emit('tool', { tool: 'text' })}>文字</button>
+  <button class:active={active === 'brush'} on:click={() => emit('tool', { tool: 'brush' })}>画笔</button> 
   <button class:active={active === 'eraser'} on:click={() => emit('tool', { tool: 'eraser' })}>橡皮</button>
   <button on:click={() => emit('undo')} disabled={!canUndo}>撤回{#if undoCount > 0} ({undoCount}){/if}</button>
   <button on:click={() => emit('redo')} disabled={!canRedo}>恢复{#if redoCount > 0} ({redoCount}){/if}</button>

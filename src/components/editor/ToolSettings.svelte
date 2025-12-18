@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { createEventDispatcher } from 'svelte';
+    import { createEventDispatcher, onMount } from 'svelte';
     export let tool: string | null = null;
     export let settings: any = {};
     const dispatch = createEventDispatcher();
@@ -16,6 +16,39 @@
         return (e.target as HTMLInputElement).checked;
     }
     let localArrowHead = settings.arrowHead || 'right';
+
+    // font list state
+    let fonts: string[] = [];
+    let loadingFonts = true;
+
+    onMount(() => {
+        // candidate fonts to check (common cross-platform + Chinese fonts)
+        const candidates = [
+            'Microsoft Yahei',
+            'PingFang SC',
+            'Source Han Sans',
+            'Source Han Serif',
+            'Arial',
+            'Helvetica',
+            'Times New Roman',
+            'Georgia',
+            'Courier New',
+            'Noto Sans',
+            'Noto Serif',
+            'SimHei',
+            'SimSun',
+            'Roboto',
+            'Segoe UI'
+        ];
+        try {
+            const detected = candidates;
+            fonts = detected && detected.length ? detected : candidates;
+        } catch (e) {
+            fonts = candidates;
+        } finally {
+            loadingFonts = false;
+        }
+    });
 </script>
 
 <div class="tool-settings">
@@ -129,6 +162,44 @@
                 <option value="right">右边</option>
                 <option value="both">两边</option>
             </select>
+        </div>
+    {:else if tool === 'text'}
+        <div class="row">
+            <label for="font-family">字体</label>
+            <select
+                id="font-family"
+                value={settings.family || settings.fontFamily || (fonts[0] || 'Microsoft Yahei')}
+                on:change={e => emitChange({ family: getValue(e) })}
+            >
+                {#if loadingFonts}
+                    <option disabled>检测字体中...</option>
+                {:else}
+                    {#each fonts as f}
+                        <option value={f}>{f}</option>
+                    {/each}
+                {/if}
+            </select>
+        </div>
+        <div class="row">
+            <label for="font-size">字号</label>
+            <input
+                id="font-size"
+                type="range"
+                min="8"
+                max="120"
+                value={settings.size || settings.fontSize || 24}
+                on:input={e => emitChange({ size: +getValue(e) })}
+            />
+            <span class="val">{settings.size || settings.fontSize || 24}</span>
+        </div>
+        <div class="row">
+            <label for="font-color">颜色</label>
+            <input
+                id="font-color"
+                type="color"
+                value={settings.fill || '#000000'}
+                on:input={e => emitChange({ fill: getValue(e) })}
+            />
         </div>
     {:else}
         <div class="empty">暂无设置</div>

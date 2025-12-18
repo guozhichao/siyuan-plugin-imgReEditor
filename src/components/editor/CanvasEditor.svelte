@@ -154,7 +154,7 @@
             if (!objs || objs.length === 0) return;
             // Allow deletion of shapes (rect, ellipse, circle) and other drawable objects
             const allowed = objs.filter((o: any) =>
-                ['rect', 'ellipse', 'circle', 'path', 'group', 'line', 'triangle'].includes(o.type)
+                ['rect', 'ellipse', 'circle', 'path', 'group', 'line', 'triangle', 'i-text', 'textbox', 'text'].includes(o.type)
             );
             if (allowed.length === 0) return;
 
@@ -432,6 +432,136 @@
                 canvas.requestRenderAll();
                 return;
             }
+
+            // Text tool: create or select an editable text object
+            if (activeTool === 'text') {
+                try {
+                    // debug info to trace clicks
+                    try {
+                        console.debug('CanvasEditor: mouse down (text tool)', { activeTool, activeToolOptions, pointer });
+                    } catch (e) {}
+
+                    // if clicked on an existing text object, select and enter edit mode instead of creating a new one
+                    let hit = opt.target;
+                    try {
+                        if (!hit && canvas && typeof (canvas as any).findTarget === 'function') {
+                            hit = (canvas as any).findTarget(opt.e);
+                        }
+                    } catch (e) {
+                        /* ignore */
+                    }
+                    if (hit && ['i-text', 'textbox', 'text'].includes(hit.type)) {
+                        try {
+                            canvas.setActiveObject(hit);
+                            // update activeToolOptions to reflect selected object's properties
+                            activeToolOptions.family = hit.fontFamily || activeToolOptions.family;
+                            activeToolOptions.size = hit.fontSize || activeToolOptions.size;
+                            activeToolOptions.fill = typeof hit.fill !== 'undefined' ? hit.fill : activeToolOptions.fill;
+                            canvas.requestRenderAll();
+                            // try to enter editing mode
+                            try {
+                                if (typeof (hit as any).enterEditing === 'function') {
+                                    (hit as any).enterEditing();
+                                    (hit as any).selectAll && (hit as any).selectAll();
+                                } else if (typeof (hit as any).enterEdit === 'function') {
+                                    (hit as any).enterEdit();
+                                }
+                            } catch (e) {
+                                console.warn('CanvasEditor: enter editing failed on existing text', e);
+                            }
+                        } catch (e) {
+                            console.warn('CanvasEditor: failed to select existing text', e);
+                        }
+                        return;
+                    }
+
+                    // Otherwise create a new text object at pointer
+                    const fontFamily = activeToolOptions.family || activeToolOptions.fontFamily || 'Microsoft Yahei';
+                    const fontSize = activeToolOptions.size || activeToolOptions.fontSize || 24;
+                    const fill = activeToolOptions.fill || '#000000';
+
+                    let itext: any = null;
+                    // Try common fabric text classes in order of preference
+                    try {
+                        if ((fabric as any).IText) {
+                            itext = new (fabric as any).IText('文字', {
+                                left: pointer.x,
+                                top: pointer.y,
+                                fontFamily,
+                                fontSize,
+                                fill,
+                                selectable: true,
+                                evented: true,
+                            });
+                        }
+                    } catch (e) {
+                        console.warn('CanvasEditor: IText creation failed', e);
+                        itext = null;
+                    }
+                    if (!itext) {
+                        try {
+                            if ((fabric as any).Textbox) {
+                                itext = new (fabric as any).Textbox('文字', {
+                                    left: pointer.x,
+                                    top: pointer.y,
+                                    fontFamily,
+                                    fontSize,
+                                    fill,
+                                    selectable: true,
+                                    evented: true,
+                                });
+                            }
+                        } catch (e) {
+                            console.warn('CanvasEditor: Textbox creation failed', e);
+                            itext = null;
+                        }
+                    }
+                    if (!itext) {
+                        try {
+                            itext = new (fabric as any).Text('文字', {
+                                left: pointer.x,
+                                top: pointer.y,
+                                fontFamily,
+                                fontSize,
+                                fill,
+                                selectable: true,
+                                evented: true,
+                            });
+                        } catch (e) {
+                            console.error('CanvasEditor: Text creation failed', e);
+                            itext = null;
+                        }
+                    }
+
+                    if (!itext) {
+                        try {
+                            console.error('CanvasEditor: failed to create any text object (no available factory)');
+                        } catch (e) {}
+                        return;
+                    }
+
+                    canvas.add(itext);
+                    canvas.setActiveObject(itext);
+                    canvas.requestRenderAll();
+
+                    // try to enter editing mode if available (IText/Textbox)
+                    try {
+                        if (typeof itext.enterEditing === 'function') {
+                            itext.enterEditing();
+                            itext.selectAll && itext.selectAll();
+                        } else if (typeof itext.enterEdit === 'function') {
+                            itext.enterEdit();
+                        }
+                    } catch (e) {
+                        console.warn('CanvasEditor: enter editing failed', e);
+                    }
+
+                    schedulePushWithType('added');
+                } catch (e) {
+                    console.error('CanvasEditor: unexpected error while creating text', e);
+                }
+                return;
+            }
         });
 
         // selection handlers: propagate selection properties
@@ -471,9 +601,19 @@
                             fill: active.fill,
                             fillOpacity: fp,
                         },
+                        type: active.type,
+                    });
+                } else if (['i-text', 'textbox', 'text'].includes(active.type)) {
+                    dispatch('selection', {
+                        options: {
+                            family: active.fontFamily,
+                            size: active.fontSize,
+                            fill: active.fill,
+                        },
+                        type: active.type,
                     });
                 } else {
-                    dispatch('selection', { options: null });
+                    dispatch('selection', { options: null, type: active.type });
                 }
             } catch (e) {}
         };
@@ -696,12 +836,19 @@
     export function setTool(tool: string | null, options: any = {}) {
         activeTool = tool;
         activeToolOptions = options || {};
+        // provide sensible defaults for text tool
+        if (tool === 'text') {
+            activeToolOptions.family = activeToolOptions.family || activeToolOptions.fontFamily || 'Microsoft Yahei';
+            activeToolOptions.size = activeToolOptions.size || activeToolOptions.fontSize || 24;
+            activeToolOptions.fill = activeToolOptions.fill || '#000000';
+        }
         // update cursor
         if (canvas) {
             if (tool === 'shape') canvas.defaultCursor = 'crosshair';
             else if (tool === 'arrow') canvas.defaultCursor = 'crosshair';
             else if (tool === 'brush') canvas.defaultCursor = 'crosshair';
             else if (tool === 'eraser') canvas.defaultCursor = 'crosshair';
+            else if (tool === 'text') canvas.defaultCursor = 'text';
             else canvas.defaultCursor = 'default';
         }
 
@@ -1106,18 +1253,26 @@
             const objs = canvas.getActiveObjects ? canvas.getActiveObjects() : [];
             if (!objs || objs.length === 0) return;
             objs.forEach((o: any) => {
-                if (o.set) {
-                    if (typeof options.stroke !== 'undefined') o.set('stroke', options.stroke);
-                    if (typeof options.strokeWidth !== 'undefined')
-                        o.set('strokeWidth', options.strokeWidth);
-                    if (typeof options.fill !== 'undefined') {
-                        const newFill = options.fill
-                            ? colorWithOpacity(options.fill, options.fillOpacity)
-                            : null;
-                        o.set('fill', newFill);
+                try {
+                    // text objects
+                    if (['i-text', 'textbox', 'text'].includes(o.type)) {
+                        if (typeof options.family !== 'undefined') o.set('fontFamily', options.family);
+                        if (typeof options.size !== 'undefined') o.set('fontSize', +options.size);
+                        if (typeof options.fill !== 'undefined') o.set('fill', options.fill);
+                        o.setCoords && o.setCoords();
+                    } else {
+                        // shapes and other objects
+                        if (typeof options.stroke !== 'undefined') o.set('stroke', options.stroke);
+                        if (typeof options.strokeWidth !== 'undefined') o.set('strokeWidth', options.strokeWidth);
+                        if (typeof options.fill !== 'undefined') {
+                            const newFill = options.fill
+                                ? colorWithOpacity(options.fill, options.fillOpacity)
+                                : null;
+                            o.set('fill', newFill);
+                        }
+                        o.setCoords && o.setCoords();
                     }
-                    o.setCoords();
-                }
+                } catch (e) {}
             });
             canvas.requestRenderAll();
             // push to history (treat as modification)
