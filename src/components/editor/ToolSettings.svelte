@@ -1,0 +1,162 @@
+<script lang="ts">
+    import { createEventDispatcher } from 'svelte';
+    export let tool: string | null = null;
+    export let settings: any = {};
+    const dispatch = createEventDispatcher();
+
+    function emitChange(partial: any) {
+        const next = { ...(settings || {}), ...(partial || {}) };
+        dispatch('change', next);
+    }
+
+    function getValue(e: Event) {
+        return (e.target as HTMLInputElement).value;
+    }
+    function getChecked(e: Event) {
+        return (e.target as HTMLInputElement).checked;
+    }
+    let localArrowHead = settings.arrowHead || 'right';
+</script>
+
+<div class="tool-settings">
+    {#if !tool}
+        <div class="empty">请选择工具</div>
+    {:else if tool === 'shape'}
+        <div class="row">
+            <label for="stroke-color">描边颜色</label>
+            <input
+                id="stroke-color"
+                type="color"
+                value={settings.stroke || '#ff0000'}
+                on:input={e => emitChange({ stroke: getValue(e) })}
+            />
+        </div>
+        <div class="row">
+            <label for="stroke-width">描边宽度</label>
+            <input
+                id="stroke-width"
+                type="range"
+                min="1"
+                max="20"
+                value={settings.strokeWidth || 2}
+                on:input={e => emitChange({ strokeWidth: +getValue(e) })}
+            />
+            <span class="val">{settings.strokeWidth || 2}</span>
+        </div>
+        <div class="row">
+            <label for="fill-en">填充</label>
+            <input
+                id="fill-en"
+                type="checkbox"
+                checked={!!settings.fill}
+                on:change={e =>
+                    emitChange({ fill: getChecked(e) ? settings.fill || '#ffffff' : null })}
+            />
+            {#if settings.fill}
+                <input
+                    id="fill-color"
+                    type="color"
+                    value={settings.fill}
+                    on:input={e => emitChange({ fill: getValue(e) })}
+                />
+                <div style="">
+                    <label for="fill-opacity" style="width:90px;">填充透明度</label>
+                    <input
+                        id="fill-opacity"
+                        type="range"
+                        min="0"
+                        max="100"
+                        value={Math.round((settings.fillOpacity || 1) * 100)}
+                        on:input={e => emitChange({ fillOpacity: +getValue(e) / 100 })}
+                    />
+                    <span class="val">{Math.round((settings.fillOpacity || 1) * 100)}%</span>
+                </div>
+            {/if}
+        </div>
+    {:else if tool === 'brush'}
+        <div class="row">
+            <label for="brush-color">颜色</label>
+            <input
+                id="brush-color"
+                type="color"
+                value={settings.stroke || '#ff0000'}
+                on:input={e => emitChange({ stroke: getValue(e) })}
+            />
+        </div>
+        <div class="row">
+            <label for="brush-size">粗细</label>
+            <input
+                id="brush-size"
+                type="range"
+                min="1"
+                max="80"
+                value={settings.strokeWidth || settings.size || 4}
+                on:input={e => emitChange({ strokeWidth: +getValue(e), size: +getValue(e) })}
+            />
+            <span class="val">{settings.strokeWidth || settings.size || 4}</span>
+        </div>
+    {:else if tool === 'arrow'}
+        <div class="row">
+            <label for="arrow-color">颜色</label>
+            <input
+                id="arrow-color"
+                type="color"
+                value={settings.stroke || '#ff0000'}
+                on:input={e => emitChange({ stroke: getValue(e) })}
+            />
+        </div>
+        <div class="row">
+            <label for="arrow-width">粗细</label>
+            <input
+                id="arrow-width"
+                type="range"
+                min="1"
+                max="20"
+                value={settings.strokeWidth || 4}
+                on:input={e => emitChange({ strokeWidth: +getValue(e) })}
+            />
+            <span class="val">{settings.strokeWidth || 4}</span>
+        </div>
+        <div class="row">
+            <label for="arrow-head">箭头</label>
+            <select
+                id="arrow-head"
+                bind:value={localArrowHead}
+                on:change={() => emitChange({ arrowHead: localArrowHead })}
+            >
+                <option value="none">无</option>
+                <option value="left">左边</option>
+                <option value="right">右边</option>
+                <option value="both">两边</option>
+            </select>
+        </div>
+    {:else}
+        <div class="empty">暂无设置</div>
+    {/if}
+</div>
+
+<style>
+    .tool-settings {
+        padding: 8px;
+        width: 240px;
+        background: rgba(255, 255, 255, 0.98);
+        border-left: 1px solid #eee;
+    }
+    .empty {
+        color: #888;
+    }
+    .row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+    }
+    .row label {
+        width: 80px;
+        font-size: 13px;
+    }
+    .val {
+        width: 30px;
+        text-align: center;
+    }
+</style>
