@@ -437,11 +437,14 @@
 
         // mouse handlers for panning and tools
         canvas.on('mouse:down', opt => {
-            if (isSpaceDown) {
+            if (isSpaceDown || activeTool === 'hand') {
                 const e = opt.e as MouseEvent;
                 isDragging = true;
                 lastPosX = e.clientX;
                 lastPosY = e.clientY;
+                if (activeTool === 'hand') {
+                    canvas.defaultCursor = 'grabbing';
+                }
                 canvas.selection = false;
                 return;
             }
@@ -997,6 +1000,9 @@
         canvas.on('mouse:up', () => {
             if (isDragging) {
                 isDragging = false;
+                if (activeTool === 'hand') {
+                    canvas.defaultCursor = 'grab';
+                }
                 canvas.selection = true;
                 return;
             }
@@ -1124,6 +1130,7 @@
             else if (tool === 'eraser') canvas.defaultCursor = 'crosshair';
             else if (tool === 'text') canvas.defaultCursor = 'text';
             else if (tool === 'number-marker') canvas.defaultCursor = 'crosshair';
+            else if (tool === 'hand') canvas.defaultCursor = 'grab';
             else canvas.defaultCursor = 'default';
         }
 

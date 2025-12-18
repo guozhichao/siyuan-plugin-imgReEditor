@@ -16,6 +16,14 @@
 <div class="editor-toolbar">
     <button
         class="b3-button"
+        class:active={active === 'hand'}
+        class:b3-button--outline={active !== 'hand'}
+        on:click={() => emit('tool', { tool: 'hand' })}
+    >
+        抓手
+    </button>
+    <button
+        class="b3-button"
         class:active={active === 'select'}
         class:b3-button--outline={active !== 'select'}
         on:click={() => emit('tool', { tool: 'select' })}
