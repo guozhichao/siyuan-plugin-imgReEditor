@@ -525,6 +525,18 @@
                         }
                     } else {
                         console.log('No saved editor data to restore');
+                        // For new images without saved data, fit to viewport now
+                        if (
+                            canvasEditorRef &&
+                            typeof canvasEditorRef.fitImageToViewport === 'function'
+                        ) {
+                            try {
+                                canvasEditorRef.fitImageToViewport();
+                                console.log('Fitted new image to viewport');
+                            } catch (e) {
+                                console.warn('Failed to fit new image to viewport', e);
+                            }
+                        }
                     }
 
                     // If user requested crop before canvas was ready, try now

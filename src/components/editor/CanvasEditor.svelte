@@ -1357,8 +1357,9 @@
 
                         canvas!.requestRenderAll();
 
-                        // Fit image to workspace
-                        fitImageToViewport();
+                        // Don't fit image to viewport here - it will be done after fromJSON
+                        // if there's saved data, or can be triggered manually with the Fit button
+                        // fitImageToViewport();
 
                         dispatch('loaded', { width: imgEl.width, height: imgEl.height, name });
                         // Mark image as loaded to prevent duplicate loads from reactive statement
@@ -1770,11 +1771,14 @@
         return (canvas as any).toJSON(['selectable', 'evented']);
     }
 
-    export function fromJSON(json: any) {
+    export async function fromJSON(json: any) {
         if (!canvas) return;
         console.log('CanvasEditor.fromJSON called with:', json);
-        canvas.loadFromJSON(json, () => {
+
+        try {
+            await canvas.loadFromJSON(json);
             console.log('loadFromJSON completed, objects count:', canvas!.getObjects().length);
+
             // After loading, ensure all objects (except background) are selectable and evented
             try {
                 canvas!.getObjects().forEach((obj: any, index: number) => {
@@ -1801,15 +1805,36 @@
             } catch (e) {
                 console.warn('Failed to restore object selectability', e);
             }
+
+            // Ensure background image coordinates are updated (critical for flipped/rotated images)
+            if (canvas!.backgroundImage) {
+                try {
+                    canvas!.backgroundImage.setCoords();
+                    console.log('Background image coords updated');
+                } catch (e) {
+                    console.warn('Failed to update background image coords', e);
+                }
+            }
+
             canvas!.renderAll();
+
             // Automatically fit to viewport after loading JSON
-            // We wait for the next tick to ensure background image is ready
+            // We wait for the next tick to ensure background image bounding rect is calculated correctly
+            // Increased timeout to 100ms to ensure proper calculation for flipped/rotated images
             setTimeout(() => {
                 console.log('fromJSON: triggering auto-fit');
                 fitImageToViewport();
-            }, 50);
-            console.log('fromJSON completed, canvas rendered and fitted');
-        });
+            }, 100);
+
+            console.log('fromJSON completed, canvas rendered and will be fitted');
+        } catch (e) {
+            console.error('fromJSON failed:', e);
+            // Even if loading fails, try to fit what we have
+            setTimeout(() => {
+                console.log('fromJSON error recovery: triggering auto-fit');
+                fitImageToViewport();
+            }, 100);
+        }
     }
 
     // Image transforms: flip and rotate (exposed to host)
@@ -1929,7 +1954,6 @@
     }
 </script>
 
-```
 <div class="canvas-editor">
     <canvas bind:this={container}></canvas>
 
@@ -1951,7 +1975,18 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        background-color: var(--b3-theme-background);
+        /* 棋盘格背景配置 */
+        --checker-size: 20px; /* 格子大小 */
+        --checker-color-1: var(--b3-theme-background); /* 颜色1 */
+        --checker-color-2: rgba(from var(--b3-theme-background-light) r g b / .3); /* 颜色2 */
+        
+        background-image: conic-gradient(
+            var(--checker-color-2) 25%, 
+            var(--checker-color-1) 0 50%, 
+            var(--checker-color-2) 0 75%, 
+            var(--checker-color-1) 0
+        );
+        background-size: var(--checker-size) var(--checker-size);
     }
     canvas {
         display: block;
