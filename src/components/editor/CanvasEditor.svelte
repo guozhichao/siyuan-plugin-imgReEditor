@@ -1417,7 +1417,13 @@
         } catch (e) {}
     }
 
-    function createArrowGroup(startX: number, startY: number, endX: number, endY: number, options: any) {
+    function createArrowGroup(
+        startX: number,
+        startY: number,
+        endX: number,
+        endY: number,
+        options: any
+    ) {
         const dx = endX - startX;
         const dy = endY - startY;
         const angleRad = Math.atan2(dy, dx);
@@ -1428,8 +1434,16 @@
         // Shorten line for arrow heads
         const lineEndX = endX - Math.cos(angleRad) * headOffset;
         const lineEndY = endY - Math.sin(angleRad) * headOffset;
-        const lineStartX = startX + ((options.arrowHead === 'left' || options.arrowHead === 'both') ? Math.cos(angleRad) * headOffset : 0);
-        const lineStartY = startY + ((options.arrowHead === 'left' || options.arrowHead === 'both') ? Math.sin(angleRad) * headOffset : 0);
+        const lineStartX =
+            startX +
+            (options.arrowHead === 'left' || options.arrowHead === 'both'
+                ? Math.cos(angleRad) * headOffset
+                : 0);
+        const lineStartY =
+            startY +
+            (options.arrowHead === 'left' || options.arrowHead === 'both'
+                ? Math.sin(angleRad) * headOffset
+                : 0);
 
         const line = new Line([lineStartX, lineStartY, lineEndX, lineEndY], {
             stroke: options.stroke || '#ff0000',
@@ -1440,31 +1454,37 @@
 
         const fabricAngle = angleDeg + 90;
 
-        const headRight = (options.arrowHead === 'right' || options.arrowHead === 'both') ? new Triangle({
-            left: endX,
-            top: endY,
-            originX: 'center',
-            originY: 'center',
-            width: Math.max(8, (options.strokeWidth || 4) * 2.2),
-            height: headH,
-            angle: fabricAngle,
-            fill: options.stroke || '#ff0000',
-            selectable: false,
-            evented: false,
-        }) : undefined;
+        const headRight =
+            options.arrowHead === 'right' || options.arrowHead === 'both'
+                ? new Triangle({
+                      left: endX,
+                      top: endY,
+                      originX: 'center',
+                      originY: 'center',
+                      width: Math.max(8, (options.strokeWidth || 4) * 2.2),
+                      height: headH,
+                      angle: fabricAngle,
+                      fill: options.stroke || '#ff0000',
+                      selectable: false,
+                      evented: false,
+                  })
+                : undefined;
 
-        const headLeft = (options.arrowHead === 'left' || options.arrowHead === 'both') ? new Triangle({
-            left: startX,
-            top: startY,
-            originX: 'center',
-            originY: 'center',
-            width: Math.max(8, (options.strokeWidth || 4) * 2.2),
-            height: headH,
-            angle: fabricAngle + 180,
-            fill: options.stroke || '#ff0000',
-            selectable: false,
-            evented: false,
-        }) : undefined;
+        const headLeft =
+            options.arrowHead === 'left' || options.arrowHead === 'both'
+                ? new Triangle({
+                      left: startX,
+                      top: startY,
+                      originX: 'center',
+                      originY: 'center',
+                      width: Math.max(8, (options.strokeWidth || 4) * 2.2),
+                      height: headH,
+                      angle: fabricAngle + 180,
+                      fill: options.stroke || '#ff0000',
+                      selectable: false,
+                      evented: false,
+                  })
+                : undefined;
 
         const parts: any[] = [line];
         if (headLeft) parts.push(headLeft);
@@ -1544,10 +1564,19 @@
                             else leftHead = h;
                         });
 
-                        const currentArrowHead = leftHead && rightHead ? 'both' : rightHead ? 'right' : leftHead ? 'left' : 'none';
+                        const currentArrowHead =
+                            leftHead && rightHead
+                                ? 'both'
+                                : rightHead
+                                  ? 'right'
+                                  : leftHead
+                                    ? 'left'
+                                    : 'none';
 
                         // Check if only color change
-                        const onlyColorChange = typeof options.stroke !== 'undefined' && Object.keys(options).length === 1;
+                        const onlyColorChange =
+                            typeof options.stroke !== 'undefined' &&
+                            Object.keys(options).length === 1;
 
                         if (onlyColorChange) {
                             // Update color only
@@ -1576,13 +1605,26 @@
 
                             // Create new options
                             const newOptions = {
-                                stroke: options.stroke !== undefined ? options.stroke : currentStroke,
-                                strokeWidth: options.strokeWidth !== undefined ? options.strokeWidth : currentStrokeWidth,
-                                arrowHead: options.arrowHead !== undefined ? options.arrowHead : currentArrowHead,
+                                stroke:
+                                    options.stroke !== undefined ? options.stroke : currentStroke,
+                                strokeWidth:
+                                    options.strokeWidth !== undefined
+                                        ? options.strokeWidth
+                                        : currentStrokeWidth,
+                                arrowHead:
+                                    options.arrowHead !== undefined
+                                        ? options.arrowHead
+                                        : currentArrowHead,
                             };
 
                             // Create new group
-                            const newGroup = createArrowGroup(tipStartX, tipStartY, tipEndX, tipEndY, newOptions);
+                            const newGroup = createArrowGroup(
+                                tipStartX,
+                                tipStartY,
+                                tipEndX,
+                                tipEndY,
+                                newOptions
+                            );
 
                             // Position the new group at the same center
                             const newCenter = newGroup.getCenterPoint();
