@@ -1951,7 +1951,7 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        background-color: var(--b3-theme-background-light, #f5f5f5);
+        background-color: var(--b3-theme-background);
     }
     canvas {
         display: block;
