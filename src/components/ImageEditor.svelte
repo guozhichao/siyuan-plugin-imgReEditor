@@ -163,10 +163,7 @@
                     }
                 }
             } catch (e) {}
-            // CanvasEditor will load image from lastBlobURL when mounted
-            try {
-                pushMsg('使用 Fabric 编辑器加载图片...');
-            } catch (e) {}
+
             return;
         } catch (e) {
             console.error('Error loading image:', e);
