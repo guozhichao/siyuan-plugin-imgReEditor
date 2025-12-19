@@ -4,19 +4,20 @@ export interface NumberMarkerOptions extends TOptions<FabricObjectProps> {
     count?: number;
     fill?: string;
     textColor?: string;
-    radius?: number;
+    fontSize?: number;
 }
 
 /**
  * Custom NumberMarker class
  * Draws a circle with a number inside
+ * Now uses fontSize as the primary property, with radius calculated from it
  */
 export class NumberMarker extends FabricObject {
     static type = 'number-marker';
 
     count: number;
     textColor: string;
-    radius: number;
+    fontSize: number;
 
     constructor(options?: NumberMarkerOptions) {
         super(options);
@@ -25,18 +26,14 @@ export class NumberMarker extends FabricObject {
         // Default fill is handled by super if passed in options, usually red from callsite
         this.fill = options?.fill || 'red';
         this.textColor = options?.textColor || 'white';
-        this.radius = options?.radius || 15;
+        this.fontSize = options?.fontSize || 20;
+
+        // Calculate radius from fontSize
+        const radius = this.fontSize * 0.8;
 
         // precise dimensions
-        this.width = this.radius * 2;
-        this.height = this.radius * 2;
-
-        // Centered origin by default usually works best for these markers, 
-        // but fabric defaults to top-left. Let's keep fabric defaults but render centered relative to 0,0 
-        // if originX/Y are center. 
-        // Actually, _render is called with (0,0) being the center of the object if originX/Y are 'center'.
-        // Fabric standard: _render is called with coordinate system translated to center of object (minus padding).
-        // Let's rely on standard center-based rendering.
+        this.width = radius * 2;
+        this.height = radius * 2;
 
         this.objectCaching = false;
 
@@ -44,42 +41,42 @@ export class NumberMarker extends FabricObject {
         this.stroke = options?.stroke || null;
         this.strokeWidth = options?.strokeWidth || 0;
 
-        // Lock scaling and rotation as per user request: "only move, no resize"
-        this.lockScalingX = true;
-        this.lockScalingY = true;
+        // Allow proportional scaling only
+        this.lockScalingX = false;
+        this.lockScalingY = false;
         this.lockRotation = true;
         this.lockSkewingX = true;
         this.lockSkewingY = true;
 
-        // Hide scaling and rotation controls
+        // Hide rotation control but keep corner scaling controls
         this.setControlsVisibility({
-            mt: false,
-            mb: false,
-            ml: false,
-            mr: false,
-            bl: false,
-            br: false,
-            tl: false,
-            tr: false,
             mtr: false,
         });
+    }
+
+    /**
+     * Get the calculated radius from fontSize
+     */
+    get radius(): number {
+        return this.fontSize * 0.8;
+    }
+
+    /**
+     * Get the effective fontSize accounting for scaling
+     */
+    getEffectiveFontSize(): number {
+        return Math.round(this.fontSize * (this.scaleX || 1));
     }
 
     _render(ctx: CanvasRenderingContext2D) {
         ctx.save();
 
-        // Render Circle
-        // The coordinate system in _render is already at the object's center (width/2, height/2)
-        // relative to left/top.
-        // Actually, in standard fabric, (0,0) is the center of the object's bounding box 
-        // if we assume standard transform setup.
+        // Calculate radius from fontSize
+        const radius = this.radius;
 
         // Draw the circle background
         ctx.beginPath();
-        // Since this.width/height are set, we draw within the box [-w/2, -w/2, w/2, h/2]
-        // But let's just use radius.
-
-        ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+        ctx.arc(0, 0, radius, 0, Math.PI * 2);
 
         if (this.fill) {
             ctx.fillStyle = this.fill as string;
@@ -94,12 +91,12 @@ export class NumberMarker extends FabricObject {
 
         // Draw the number
         ctx.fillStyle = this.textColor;
-        // Font size should scale with radius?
-        ctx.font = `bold ${this.radius * 1.2}px sans-serif`;
+        // Font size matches the fontSize property
+        ctx.font = `bold ${this.fontSize}px sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         // Minor optical adjustment for vertical centering
-        ctx.fillText(this.count.toString(), 0, this.radius * 0.1);
+        ctx.fillText(this.count.toString(), 0, this.fontSize * 0.05);
 
         ctx.restore();
     }
@@ -108,7 +105,7 @@ export class NumberMarker extends FabricObject {
      * Override toObject to include custom properties
      */
     toObject(propertiesToInclude: any[] = []): any {
-        return super.toObject(['count', 'textColor', 'radius', ...propertiesToInclude]);
+        return super.toObject(['count', 'textColor', 'fontSize', ...propertiesToInclude]);
     }
 }
 

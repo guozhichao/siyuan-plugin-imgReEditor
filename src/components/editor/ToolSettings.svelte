@@ -334,14 +334,14 @@
             />
         </div>
         <div class="row">
-            <label for="num-radius">大小</label>
+            <label for="num-fontsize">字体大小</label>
             <input
-                id="num-radius"
+                id="num-fontsize"
                 type="number"
-                min="5"
-                max="100"
-                value={settings.radius || 15}
-                on:input={e => emitChange({ radius: +getValue(e) })}
+                min="8"
+                max="80"
+                value={settings.fontSize || 20}
+                on:input={e => emitChange({ fontSize: +getValue(e) })}
                 style="width: 60px;"
             />
         </div>
