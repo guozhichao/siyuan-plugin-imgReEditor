@@ -23,7 +23,7 @@
 - 支持裁剪翻转图片，支持添加文字、添加矩形椭圆、添加箭头、添加数字序号、画笔等功能
 - 保存png图片支持二次编辑插件添加的图片修改和标注内容
 
-![](https://fastly.jsdelivr.net/gh/Achuan-2/PicBed/assets/20251219121547-2025-12-19.png)
+![](https://fastly.jsdelivr.net/gh/Achuan-2/PicBed/assets/20251219121902-2025-12-19.png)
 
 **快捷键**
 - Esc：
