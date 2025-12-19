@@ -41,6 +41,7 @@ pnpm run dev
 ## 🙏 致谢
 
 - 基于 [plugin-sample-vite-svelte](https://github.com/siyuan-note/plugin-sample-vite-svelte/) 模板开发
+- 参考 [oyjt/interactive-whiteboard](https://github.com/oyjt/interactive-whiteboard)的fabric的箭头绘制和形状控件实现
 
 ## ❤️用爱发电
 

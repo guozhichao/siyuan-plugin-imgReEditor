@@ -8,7 +8,6 @@ import fg from 'fast-glob';
 import fs from 'fs';
 import { execSync } from 'child_process';
 
-import vitePluginYamlI18n from './yaml-plugin';
 
 const env = process.env;
 const isSrcmap = env.VITE_SOURCEMAP === 'inline';
@@ -24,26 +23,21 @@ export default defineConfig({
     resolve: {
         alias: {
             "@": resolve(__dirname, "src"),
-            "@editor": resolve(__dirname, "src/lib/image-editor/js"),
-            "@editor-css": resolve(__dirname, "src/lib/image-editor/css"),
-            "@editor-svg": resolve(__dirname, "src/lib/image-editor/svg"),
         }
     },
 
     plugins: [
         svelte(),
 
-        vitePluginYamlI18n({
-            inDir: 'public/i18n',
-            outDir: `${outputDir}/i18n`
-        }),
-
         viteStaticCopy({
             targets: [
                 { src: "./README*.md", dest: "./" },
                 { src: "./plugin.json", dest: "./" },
                 { src: "./preview.png", dest: "./" },
-                { src: "./icon.png", dest: "./" }
+                { src: "./icon.png", dest: "./" },
+                { src: "./audios/*", dest: "./audios/" },
+                { src: "./assets/*", dest: "./assets/" },
+                { src: "./i18n/*", dest: "./i18n/" },
             ],
         }),
 
@@ -75,6 +69,7 @@ export default defineConfig({
 
     build: {
         outDir: outputDir,
+        // Keep existing files in output directory for incremental builds
         emptyOutDir: false,
         minify: true,
         sourcemap: isSrcmap ? 'inline' : false,
@@ -91,7 +86,7 @@ export default defineConfig({
                         name: 'watch-external',
                         async buildStart() {
                             const files = await fg([
-                                'public/i18n/**',
+                                './i18n/**',
                                 './README*.md',
                                 './plugin.json'
                             ]);

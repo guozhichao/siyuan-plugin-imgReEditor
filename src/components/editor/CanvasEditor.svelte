@@ -21,6 +21,8 @@
     import Arrow from './Arrow';
     import NumberMarker from './NumberMarker';
     import CropRect from './CropRect';
+    import initControls from './initControls';
+    import initControlsRotate from './initControlsRotate';
 
     export let dataURL: string | null = null;
     export let fileName: string | undefined;
@@ -359,6 +361,11 @@
             preserveObjectStacking: true,
             renderOnAddRemove: true,
         });
+
+        // Initialize custom controls
+        initControls(canvas);
+        initControlsRotate(canvas);
+
         canvas.freeDrawingBrush = new PencilBrush(canvas);
 
         // basic wheel zoom
