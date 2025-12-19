@@ -22,11 +22,7 @@
     import Arrow from './Arrow';
     import NumberMarker from './NumberMarker';
     import CropRect from './CropRect';
-    import SelectCanvasSizeRect from './SelectCanvasSizeRect';
-    import initControls, {
-        createCropControls,
-        createSelectCanvasSizeControls,
-    } from './initControls';
+    import initControls, { createCropControls } from './initControls';
     import initControlsRotate from './initControlsRotate';
 
     export let dataURL: string | null = null;
@@ -48,9 +44,6 @@
     const dispatch = createEventDispatcher();
     // Track if image has been loaded to prevent duplicate loads
     let imageLoaded = false;
-    // Logical canvas size for canvas mode
-    let logicalWidth = 800;
-    let logicalHeight = 600;
     // History (undo/redo)
     let history: any[] = [];
     let historyIndex = -1;
@@ -64,7 +57,7 @@
         '_isCropRect',
         'count', // for NumberMarker
         'textColor', // for NumberMarker
-        'radius', // for NumberMarker
+        'fontSize', // for NumberMarker
         '_originalSrc',
         '_cropOffset',
         '_isImageBorder',
@@ -284,7 +277,7 @@
                     'arrowHead',
                     'count',
                     'textColor',
-                    'radius',
+                    'fontSize',
                 ])
             );
 
@@ -504,13 +497,9 @@
         dispatch('ready');
 
         // Attach basic history listeners (use typed scheduling for merging)
-        canvas.on('object:added', (opt: any) => {
-            if (opt.target && (opt.target as any)._isCanvasBoundary) return;
-            schedulePushWithType('added');
-        });
+        canvas.on('object:added', () => schedulePushWithType('added'));
         canvas.on('object:modified', (opt: any) => {
             const target = opt.target;
-            if (target && (target as any)._isCanvasBoundary) return;
             if (target && ['i-text', 'textbox', 'text'].includes(target.type)) {
                 if (target.scaleX !== 1 || target.scaleY !== 1) {
                     const newFontSize = Math.round(target.fontSize * target.scaleX);
@@ -556,10 +545,9 @@
             }
         });
         canvas.on('object:removed', (opt: any) => {
-            const target = opt && opt.target;
-            if (target && (target as any)._isCanvasBoundary) return;
             schedulePushWithType('removed');
             try {
+                const target = opt && opt.target;
                 if (target && (target as any)._isCropRect) {
                     // If the crop rect was deleted, exit crop mode to clean up handlers/state
                     exitCropMode();
@@ -668,7 +656,7 @@
 
             // If shape tool active, start drawing on mouse down
             if (activeTool === 'shape') {
-                // If user clicked on an existing object, allow selection/move instead of starting a new draw
+                // Only allow selecting shapes that match the current tool (rect/ellipse/circle)
                 let hit = opt.target;
                 try {
                     if (!hit && canvas && typeof (canvas as any).findTarget === 'function') {
@@ -677,14 +665,24 @@
                 } catch (e) {
                     /* ignore */
                 }
-                if (hit) {
+                // Only allow selection if the hit object is a shape type (rect, ellipse, circle)
+                const allowedShapeTypes = ['rect', 'ellipse', 'circle'];
+                if (hit && allowedShapeTypes.includes(hit.type)) {
                     try {
                         canvas.setActiveObject(hit);
                         canvas.requestRenderAll();
                     } catch (e) {}
                     return;
                 }
-                // If no hit and there is an active object, clear selection so new drawing can start
+                // If hit a non-matching object, clear selection and prevent default interaction
+                // This prevents moving images or other objects when drawing shapes
+                if (hit) {
+                    try {
+                        canvas.discardActiveObject();
+                        canvas.requestRenderAll();
+                    } catch (e) {}
+                }
+                // Clear any active object to ensure new drawing can start
                 try {
                     const current = canvas.getActiveObject && canvas.getActiveObject();
                     if (current) {
@@ -754,18 +752,29 @@
             }
             // Arrow tool: start drawing using custom Arrow class
             if (activeTool === 'arrow') {
-                // if clicked on an existing object, select it instead of starting a new arrow
+                // Only allow selecting arrows, not other shapes
                 let hit = opt.target;
                 try {
                     if (!hit && canvas && typeof (canvas as any).findTarget === 'function') {
                         hit = (canvas as any).findTarget(opt.e);
                     }
                 } catch (e) {}
-                if (hit) {
+                // Only allow selection if the hit object is an arrow
+                if (
+                    hit &&
+                    (hit.type === 'arrow' || (hit.type === 'line' && (hit as any).arrowHead))
+                ) {
                     try {
                         canvas.setActiveObject(hit);
                         canvas.requestRenderAll();
                         return;
+                    } catch (e) {}
+                }
+                // If hit a non-arrow object, clear selection to prevent moving it
+                if (hit) {
+                    try {
+                        canvas.discardActiveObject();
+                        canvas.requestRenderAll();
                     } catch (e) {}
                 }
 
@@ -789,7 +798,7 @@
 
             // Number marker tool
             if (activeTool === 'number-marker') {
-                // if clicked on an existing object, select it instead
+                // Only allow selecting number markers, not other shapes
                 let hit = opt.target;
                 try {
                     if (!hit && canvas && typeof (canvas as any).findTarget === 'function') {
@@ -797,7 +806,8 @@
                     }
                 } catch (e) {}
 
-                if (hit) {
+                // Only allow selection if the hit object is a number marker
+                if (hit && hit.type === 'number-marker') {
                     try {
                         canvas.setActiveObject(hit);
 
@@ -809,10 +819,17 @@
                     } catch (e) {}
                     return;
                 }
+                // If hit a non-marker object, clear selection to prevent moving it
+                if (hit) {
+                    try {
+                        canvas.discardActiveObject();
+                        canvas.requestRenderAll();
+                    } catch (e) {}
+                }
 
                 // Create new NumberMarker
                 const fill = activeToolOptions.fill || '#ff0000';
-                const radius = activeToolOptions.radius || 15;
+                const fontSize = activeToolOptions.fontSize || 20;
                 // Use counter then increment
                 const mk = new NumberMarker({
                     left: pointer.x,
@@ -825,7 +842,7 @@
                     selectable: true,
                     evented: true,
                     erasable: true,
-                    radius: radius,
+                    fontSize: fontSize,
                 });
 
                 canvas.add(mk);
@@ -844,18 +861,26 @@
 
             // Mosaic tool: start drawing mosaic rectangle
             if (activeTool === 'mosaic') {
-                // if clicked on an existing object, select it instead
+                // Only allow selecting mosaic rectangles, not other shapes
                 let hit = opt.target;
                 try {
                     if (!hit && canvas && typeof (canvas as any).findTarget === 'function') {
                         hit = (canvas as any).findTarget(opt.e);
                     }
                 } catch (e) {}
-                if (hit) {
+                // Only allow selection if the hit object is a mosaic-rect
+                if (hit && hit.type === 'mosaic-rect') {
                     try {
                         canvas.setActiveObject(hit);
                         canvas.requestRenderAll();
                         return;
+                    } catch (e) {}
+                }
+                // If hit a non-mosaic object, clear selection to prevent moving it
+                if (hit) {
+                    try {
+                        canvas.discardActiveObject();
+                        canvas.requestRenderAll();
                     } catch (e) {}
                 }
 
@@ -1223,7 +1248,7 @@
                         options: {
                             fill: fillVal,
                             count: (active as any).count,
-                            radius: (active as any).radius,
+                            fontSize: (active as any).fontSize,
                             nextNumber: currentNumber,
                             isSelection: true,
                         },
@@ -1508,18 +1533,10 @@
         return canvas;
     }
 
-    export function getSelectCanvasSizeMode() {
-        return selectCanvasSizeMode;
-    }
-
     export function setTool(tool: string | null, options: any = {}) {
         // If we were in crop mode and switching to another tool, exit it properly
         if (cropMode && tool !== 'crop' && tool !== null) {
             exitCropMode();
-        }
-        // If we were in select canvas size mode and switching to another tool, exit it properly
-        if (selectCanvasSizeMode && tool !== 'canvas' && tool !== null) {
-            exitSelectCanvasSizeMode();
         }
 
         activeTool = tool;
@@ -1658,12 +1675,6 @@
     let cropRatio: { w: number; h: number } | null = null;
     let cropRatioLabel: string = 'none';
     let cropRestoreData: any = null; // To track if we need to undo a restore on cancel
-
-    // Select canvas size mode state
-    let selectCanvasSizeMode = false;
-    let selectCanvasSizeRect: any = null;
-    let _selectCanvasSizeKeyHandler: ((e: KeyboardEvent) => void) | null = null;
-    let _selectCanvasSizeVPT: any = null;
 
     // Crop helpers (exported)
     export function enterCropMode(restoreCrop?: {
@@ -2152,192 +2163,6 @@
         canvas.requestRenderAll();
     }
 
-    // Select canvas size mode
-    export function enterSelectCanvasSizeMode() {
-        if (!canvas || !isCanvasMode) return;
-        if (selectCanvasSizeMode && selectCanvasSizeRect) return;
-        selectCanvasSizeMode = true;
-        dispatch('selectCanvasSizeModeChanged', true);
-
-        // Save current viewport transform
-        _selectCanvasSizeVPT = canvas.viewportTransform ? [...canvas.viewportTransform] : null;
-        canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
-
-        // Ensure no existing rect
-        if (selectCanvasSizeRect) {
-            canvas.remove(selectCanvasSizeRect);
-            selectCanvasSizeRect = null;
-        }
-
-        // Deselect all objects
-        try {
-            canvas.discardActiveObject();
-        } catch (e) {}
-
-        // Disable selectability for existing objects during selection
-        canvas.getObjects().forEach((obj: any) => {
-            obj.selectable = false;
-            obj.evented = false;
-        });
-
-        // Create rectangle with current canvas size
-        const canvasWidth = logicalWidth;
-        const canvasHeight = logicalHeight;
-        selectCanvasSizeRect = new SelectCanvasSizeRect({
-            left: 0,
-            top: 0,
-            width: canvasWidth,
-            height: canvasHeight,
-            fill: 'transparent',
-            stroke: '#007bff',
-            strokeWidth: 2,
-            strokeDashArray: [5, 5],
-            selectable: true,
-            evented: true,
-            hasControls: true,
-            hasBorders: true,
-            transparentCorners: false,
-            cornerColor: 'white',
-            cornerStrokeColor: 'black',
-            cornerSize: 10,
-            lockRotation: true,
-        });
-        canvas.add(selectCanvasSizeRect);
-
-        // Add custom controls with confirm and cancel buttons
-        const selectCanvasSizeControls = createSelectCanvasSizeControls(
-            () => {
-                applySelection();
-                return true;
-            },
-            () => {
-                exitSelectCanvasSizeMode();
-                return true;
-            }
-        );
-        selectCanvasSizeRect.setCustomControls(selectCanvasSizeControls);
-
-        canvas.setActiveObject(selectCanvasSizeRect);
-
-        // Keyboard shortcuts for select canvas size
-        _selectCanvasSizeKeyHandler = (e: KeyboardEvent) => {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                applySelection();
-            } else if (e.key === 'Escape') {
-                e.preventDefault();
-                exitSelectCanvasSizeMode();
-            }
-        };
-        document.addEventListener('keydown', _selectCanvasSizeKeyHandler as any);
-
-        canvas.requestRenderAll();
-    }
-
-    export function exitSelectCanvasSizeMode() {
-        if (!canvas || !selectCanvasSizeMode) return;
-
-        try {
-            if (selectCanvasSizeRect) {
-                canvas.remove(selectCanvasSizeRect);
-            }
-        } catch (e) {}
-        selectCanvasSizeRect = null;
-
-        selectCanvasSizeMode = false;
-        dispatch('selectCanvasSizeModeChanged', false);
-        try {
-            document.removeEventListener('keydown', _selectCanvasSizeKeyHandler as any);
-        } catch (e) {}
-        _selectCanvasSizeKeyHandler = null;
-
-        // Restore viewport transform
-        if (_selectCanvasSizeVPT) {
-            canvas.setViewportTransform(_selectCanvasSizeVPT);
-            _selectCanvasSizeVPT = null;
-        }
-
-        canvas.getObjects().forEach((obj: any) => {
-            obj.selectable = true;
-            obj.evented = true;
-        });
-        canvas.requestRenderAll();
-    }
-
-    function applySelection() {
-        if (!selectCanvasSizeRect || !canvas) {
-            if (selectCanvasSizeRect && canvas) canvas.remove(selectCanvasSizeRect);
-            return;
-        }
-
-        // Use bounding rect to take into account object scaling and transforms
-        const bounding = selectCanvasSizeRect.getBoundingRect(true);
-        const rectLeft = Math.round(bounding.left || 0);
-        const rectTop = Math.round(bounding.top || 0);
-        const width = Math.max(0, Math.round(bounding.width || 0));
-        const height = Math.max(0, Math.round(bounding.height || 0));
-
-        const minSize = 50;
-        console.log('SelectCanvas.applySelection', {
-            rectLeft,
-            rectTop,
-            width,
-            height,
-            canvasW: canvas.getWidth(),
-            canvasH: canvas.getHeight(),
-            bg: canvas.backgroundImage
-                ? {
-                      bw: (canvas.backgroundImage as any).width,
-                      bh: (canvas.backgroundImage as any).height,
-                      scaleX: (canvas.backgroundImage as any).scaleX,
-                      scaleY: (canvas.backgroundImage as any).scaleY,
-                  }
-                : null,
-        });
-        if (width < minSize || height < minSize) {
-            try {
-                canvas.remove(selectCanvasSizeRect);
-            } catch (e) {}
-            selectCanvasSizeRect = null;
-            canvas.requestRenderAll();
-            return;
-        }
-
-        // Shift all objects to be relative to the new canvas origin.
-        // Use bounding rect left/top which are in canvas coordinates.
-        canvas.getObjects().forEach((obj: any) => {
-            if (!obj) return;
-            if (obj === selectCanvasSizeRect || obj._isCanvasBoundary) return; // Skip the selection rect and boundary
-
-            // If the object has an origin different than 'left,top' (rare here), we still adjust left/top
-            obj.left = (obj.left || 0) - rectLeft;
-            obj.top = (obj.top || 0) - rectTop;
-            obj.setCoords();
-        });
-
-        // Resize canvas to selected size (logical pixels)
-        resizeCanvas(width, height);
-
-        // Cleanup
-        try {
-            canvas.remove(selectCanvasSizeRect);
-        } catch (e) {}
-        selectCanvasSizeRect = null;
-        selectCanvasSizeMode = false;
-        try {
-            document.removeEventListener('keydown', _selectCanvasSizeKeyHandler as any);
-        } catch (e) {}
-        _selectCanvasSizeKeyHandler = null;
-
-        canvas.getObjects().forEach((obj: any) => {
-            obj.selectable = true;
-            obj.evented = true;
-        });
-
-        canvas.requestRenderAll();
-        schedulePushWithType('modified');
-    }
-
     // If there's a pending crop rectangle, apply it (used by host before save)
     export function applyPendingCrop() {
         try {
@@ -2353,8 +2178,6 @@
             // Initialize default blank canvas size
             const imgW = 800;
             const imgH = 600;
-            logicalWidth = imgW;
-            logicalHeight = imgH;
             canvas.setDimensions({ width: imgW, height: imgH });
 
             // Set a neutral background color for canvas mode
@@ -2473,19 +2296,15 @@
     };
 
     const handleZoom1to1 = () => {
-        if (!canvas) return;
-        if (isCanvasMode) {
-            canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
-        } else if (canvas.backgroundImage) {
-            const bg = canvas.backgroundImage;
-            const imgW = (bg.width || 0) * (bg.scaleX || 1);
-            const imgH = (bg.height || 0) * (bg.scaleY || 1);
-            const cw = canvas.getWidth();
-            const ch = canvas.getHeight();
-            const tx = (cw - imgW) / 2;
-            const ty = (ch - imgH) / 2;
-            canvas.setViewportTransform([1, 0, 0, 1, tx, ty]);
-        }
+        if (!canvas || !canvas.backgroundImage) return;
+        const bg = canvas.backgroundImage;
+        const imgW = (bg.width || 0) * (bg.scaleX || 1);
+        const imgH = (bg.height || 0) * (bg.scaleY || 1);
+        const cw = canvas.getWidth();
+        const ch = canvas.getHeight();
+        const tx = (cw - imgW) / 2;
+        const ty = (ch - imgH) / 2;
+        canvas.setViewportTransform([1, 0, 0, 1, tx, ty]);
         updateZoomDisplay();
         canvas.requestRenderAll();
     };
@@ -2501,42 +2320,62 @@
         const w = canvas.getWidth();
         const h = canvas.getHeight();
 
-        canvas.setDimensions({ width: cw, height: ch });
-        canvas.setDimensions({ width: cw, height: ch }, { cssOnly: true });
+        // For canvas mode, always use custom size mode to show the full canvas with boundaries
+        // Check if canvas dimensions match workspace (Uncropped / Artboard mode)
+        // or if we have a custom size (Cropped / True Resolution mode / Canvas mode)
+        const isCustomSize = isCanvasMode || Math.abs(w - cw) > 2 || Math.abs(h - ch) > 2;
 
-        const containerEl = canvas.getElement().parentNode as HTMLElement;
-        if (containerEl && containerEl.classList.contains('canvas-container')) {
-            containerEl.style.width = cw + 'px';
-            containerEl.style.height = ch + 'px';
-            containerEl.style.margin = '0';
-            containerEl.style.marginTop = '0';
-        }
-
-        const bg = canvas.backgroundImage;
-        if (isCanvasMode) {
-            // Canvas mode: fit logical canvas size
-            const contentW = logicalWidth;
-            const contentH = logicalHeight;
-            const scale = Math.min(cw / contentW, ch / contentH, 1) * 0.98;
-            const tx = (cw - contentW * scale) / 2;
-            const ty = (ch - contentH * scale) / 2;
-            canvas.setViewportTransform([scale, 0, 0, scale, tx, ty]);
-        } else if (bg) {
-            // Edit mode: fit current background image bounding rect
-            let boundingRect = bg.getBoundingRect();
-            const imgW = boundingRect.width;
-            const imgH = boundingRect.height;
-            const imgCenterX = boundingRect.left + imgW / 2;
-            const imgCenterY = boundingRect.top + imgH / 2;
-            const scale = Math.min(cw / imgW, ch / imgH, 1) * 0.98;
-            const tx = cw / 2 - imgCenterX * scale;
-            const ty = ch / 2 - imgCenterY * scale;
-            canvas.setViewportTransform([scale, 0, 0, scale, tx, ty]);
-        } else {
+        if (isCustomSize) {
+            // Custom Size Mode: Use CSS scaling
             canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
+            const scale = Math.min(cw / w, ch / h, 1) * 0.98;
+            const finalCssW = w * scale;
+            const finalCssH = h * scale;
+            canvas.setDimensions({ width: finalCssW, height: finalCssH }, { cssOnly: true });
+
+            const containerEl = canvas.getElement().parentNode as HTMLElement;
+            if (containerEl && containerEl.classList.contains('canvas-container')) {
+                containerEl.style.margin = '0 auto';
+                if (finalCssH < ch) {
+                    containerEl.style.marginTop = `${(ch - finalCssH) / 2}px`;
+                } else {
+                    containerEl.style.marginTop = '0px';
+                }
+            }
+            updateZoomDisplay();
+            canvas.requestRenderAll();
+        } else {
+            // Artboard Mode: Zoom the content to fit
+            canvas.setDimensions({ width: cw, height: ch });
+            canvas.setDimensions({ width: cw, height: ch }, { cssOnly: true });
+
+            const containerEl = canvas.getElement().parentNode as HTMLElement;
+            if (containerEl && containerEl.classList.contains('canvas-container')) {
+                containerEl.style.margin = '0';
+                containerEl.style.marginTop = '0';
+            }
+
+            const bg = canvas.backgroundImage;
+            if (bg) {
+                // Get the actual bounding box of the background image (handles flip and rotate)
+                let boundingRect = bg.getBoundingRect();
+
+                const imgW = boundingRect.width;
+                const imgH = boundingRect.height;
+                const imgCenterX = boundingRect.left + imgW / 2;
+                const imgCenterY = boundingRect.top + imgH / 2;
+
+                if (imgW > 0 && imgH > 0) {
+                    const scale = Math.min(cw / imgW, ch / imgH, 1) * 0.98;
+                    const tx = cw / 2 - imgCenterX * scale;
+                    const ty = ch / 2 - imgCenterY * scale;
+
+                    canvas.setViewportTransform([scale, 0, 0, scale, tx, ty]);
+                }
+            }
+            updateZoomDisplay();
+            canvas.requestRenderAll();
         }
-        updateZoomDisplay();
-        canvas.requestRenderAll();
     }
 
     async function updateImageBorder(options: any) {
@@ -2846,37 +2685,6 @@
                 bg._borderEnabled = json.backgroundImage._borderEnabled;
             }
 
-            // For canvas mode, add boundary rectangle
-            if (isCanvasMode) {
-                const w = canvas.getWidth();
-                const h = canvas.getHeight();
-
-                // Remove any existing boundary
-                const existingBoundary = canvas.getObjects().find((o: any) => o._isCanvasBoundary);
-                if (existingBoundary) {
-                    canvas.remove(existingBoundary);
-                }
-
-                // Add new boundary rectangle
-                const boundaryRect = new Rect({
-                    left: 0,
-                    top: 0,
-                    width: w,
-                    height: h,
-                    fill: 'transparent',
-                    stroke: '#e0e0e0',
-                    strokeWidth: 2,
-                    strokeDashArray: [10, 5],
-                    selectable: false,
-                    evented: false,
-                    hoverCursor: 'default',
-                    excludeFromExport: true,
-                });
-                (boundaryRect as any)._isCanvasBoundary = true;
-                canvas.add(boundaryRect);
-                canvas.sendObjectToBack(boundaryRect);
-            }
-
             restoreObjectSelectionStates();
             canvas.renderAll();
             fitImageToViewport();
@@ -2911,46 +2719,11 @@
                     actual._cropOffset = json.backgroundImage._cropOffset;
                     actual._appliedMargin = json.backgroundImage._appliedMargin;
                     actual._unborderedSrc = json.backgroundImage._unborderedSrc;
-                    actual._outerRadius = json.backgroundImage._outerRadius;
-                    actual._borderEnabled = json.backgroundImage._borderEnabled;
                 }
                 bg._originalSrc = json.backgroundImage._originalSrc;
                 bg._cropOffset = json.backgroundImage._cropOffset;
                 bg._appliedMargin = json.backgroundImage._appliedMargin;
                 bg._unborderedSrc = json.backgroundImage._unborderedSrc;
-                bg._outerRadius = json.backgroundImage._outerRadius;
-                bg._borderEnabled = json.backgroundImage._borderEnabled;
-            }
-
-            // For canvas mode, add boundary rectangle
-            if (isCanvasMode) {
-                const w = canvas.getWidth();
-                const h = canvas.getHeight();
-
-                // Remove any existing boundary
-                const existingBoundary = canvas.getObjects().find((o: any) => o._isCanvasBoundary);
-                if (existingBoundary) {
-                    canvas.remove(existingBoundary);
-                }
-
-                // Add new boundary rectangle
-                const boundaryRect = new Rect({
-                    left: 0,
-                    top: 0,
-                    width: w,
-                    height: h,
-                    fill: 'transparent',
-                    stroke: '#e0e0e0',
-                    strokeWidth: 2,
-                    strokeDashArray: [10, 5],
-                    selectable: false,
-                    evented: false,
-                    hoverCursor: 'default',
-                    excludeFromExport: true,
-                });
-                (boundaryRect as any)._isCanvasBoundary = true;
-                canvas.add(boundaryRect);
-                canvas.sendObjectToBack(boundaryRect);
             }
 
             restoreObjectSelectionStates();
@@ -2987,7 +2760,7 @@
         if (activeTool === 'number-marker') {
             return {
                 ...(activeToolOptions || {}),
-                radius: activeToolOptions?.radius || 15, // default
+                fontSize: activeToolOptions?.fontSize || 20, // default
                 count: currentNumber,
                 nextNumber: currentNumber, // If selection active, this value might be overridden by updated logic below to show global next
                 isSelection: false,
@@ -3168,10 +2941,11 @@
                                 o.set('count', options.count);
                                 o.dirty = true;
                             }
-                            if (typeof options.radius !== 'undefined') {
-                                o.set('radius', options.radius);
-                                o.set('width', options.radius * 2);
-                                o.set('height', options.radius * 2);
+                            if (typeof options.fontSize !== 'undefined') {
+                                o.set('fontSize', options.fontSize);
+                                const radius = options.fontSize * 0.8;
+                                o.set('width', radius * 2);
+                                o.set('height', radius * 2);
                                 o.dirty = true;
                             }
                         }
@@ -3218,8 +2992,8 @@
 
             if (isCanvasMode && !bg) {
                 // Export entire canvas area
-                imgW = logicalWidth;
-                imgH = logicalHeight;
+                imgW = canvas.getWidth();
+                imgH = canvas.getHeight();
                 tx = 0;
                 ty = 0;
             } else {
@@ -3252,7 +3026,7 @@
             const result = canvas.toDataURL({
                 format: options.format as any,
                 quality: options.quality,
-                multiplier: isCanvasMode ? 3 : 1,
+                multiplier: 1,
                 enableRetinaScaling: false,
             });
 
@@ -3270,30 +3044,73 @@
         }
     }
 
-    export function toJSON() {
+    export async function toJSON() {
         if (!canvas) return null;
         // Standard toJSON includes HISTORY_PROPS for top-level objects.
         // We also want to ensure custom metadata on backgroundImage is included.
         const json = (canvas as any).toJSON(HISTORY_PROPS);
 
-        console.log(
-            'CanvasEditor: toJSON called, objects count:',
-            canvas.getObjects().length,
-            'canvas size:',
-            canvas.getWidth(),
-            'x',
-            canvas.getHeight(),
-            'isCanvasMode:',
-            isCanvasMode
-        );
+
 
         // For canvas mode, add canvas dimensions and remove backgroundImage to avoid blob URL issues
         if (isCanvasMode) {
-            json.width = logicalWidth;
-            json.height = logicalHeight;
+            json.width = canvas.getWidth();
+            json.height = canvas.getHeight();
             if (json.backgroundImage) {
-                console.log('CanvasEditor: Removing backgroundImage for canvas mode');
                 delete json.backgroundImage;
+            }
+
+            // Convert blob URLs to base64 data URLs for permanent storage
+            if (json.objects) {
+                const conversionPromises: Promise<void>[] = [];
+
+                json.objects.forEach((obj: any, index: number) => {
+                    // Fabric.js uses 'Image' (capital I) for image objects
+                    if (
+                        obj.type &&
+                        obj.type.toLowerCase() === 'image' &&
+                        obj.src &&
+                        obj.src.startsWith('blob:')
+                    ) {
+
+                        // Create a promise to convert blob URL to data URL
+                        const conversionPromise = new Promise<void>(resolve => {
+                            const img = new Image();
+                            img.crossOrigin = 'anonymous';
+                            img.onload = () => {
+                                try {
+                                    const tempCanvas = document.createElement('canvas');
+                                    tempCanvas.width = img.naturalWidth || img.width;
+                                    tempCanvas.height = img.naturalHeight || img.height;
+                                    const ctx = tempCanvas.getContext('2d');
+                                    if (ctx) {
+                                        ctx.drawImage(img, 0, 0);
+                                        const dataURL = tempCanvas.toDataURL('image/png');
+                                        obj.src = dataURL;
+                                    }
+                                } catch (e) {
+                                    console.error(`Failed to convert image ${index} to base64:`, e);
+                                }
+                                resolve();
+                            };
+                            img.onerror = () => {
+                                console.error(
+                                    `Failed to load image ${index} from blob URL:`,
+                                    obj.src
+                                );
+                                resolve();
+                            };
+                            img.src = obj.src;
+                        });
+
+                        conversionPromises.push(conversionPromise);
+                    }
+                });
+
+                // Wait for all conversions to complete
+                if (conversionPromises.length > 0) {
+                    await Promise.all(conversionPromises);
+                }
             }
         } else if (canvas.backgroundImage && json.backgroundImage) {
             const bg = canvas.backgroundImage as any;
@@ -3305,12 +3122,6 @@
             json.backgroundImage._outerRadius = bg._outerRadius;
             json.backgroundImage._borderEnabled = bg._borderEnabled;
         }
-
-        // Filter out canvas boundary objects from history to prevent them from being undone
-        if (json.objects) {
-            json.objects = json.objects.filter((obj: any) => !obj._isCanvasBoundary);
-        }
-
         return json;
     }
 
@@ -3321,28 +3132,13 @@
         isHistoryProcessing = true;
 
         try {
-            console.log('CanvasEditor: fromJSON called', json);
 
             await canvas.loadFromJSON(json);
 
             // Restore canvas dimensions if they were saved (loadFromJSON should handle this, but ensure it)
             if (json.width && json.height) {
-                console.log(
-                    'CanvasEditor: Restoring canvas dimensions:',
-                    json.width,
-                    'x',
-                    json.height
-                );
-                logicalWidth = json.width;
-                logicalHeight = json.height;
                 canvas.setDimensions({ width: json.width, height: json.height });
             } else {
-                console.log(
-                    'CanvasEditor: No dimensions in JSON, current size:',
-                    canvas.getWidth(),
-                    'x',
-                    canvas.getHeight()
-                );
             }
 
             // For canvas mode, add boundary rectangle
@@ -3397,10 +3193,6 @@
 
             canvas!.renderAll();
 
-            console.log(
-                'CanvasEditor: fromJSON completed, objects count:',
-                canvas.getObjects().length
-            );
 
             // Automatically fit to viewport after loading JSON
             setTimeout(() => {
@@ -3539,8 +3331,6 @@
     export function resizeCanvas(width: number, height: number) {
         if (!canvas || !isCanvasMode) return;
 
-        logicalWidth = width;
-        logicalHeight = height;
         try {
             // Update canvas dimensions
             canvas.setDimensions({ width, height });
@@ -3556,9 +3346,6 @@
             fitImageToViewport();
             canvas.requestRenderAll();
             schedulePushWithType('modified');
-            try {
-                dispatch('canvasResized', { width, height });
-            } catch (e) {}
         } catch (e) {
             console.error('CanvasEditor: resizeCanvas failed:', e);
         }
