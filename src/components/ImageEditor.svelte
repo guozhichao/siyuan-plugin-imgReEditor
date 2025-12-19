@@ -38,6 +38,12 @@
     let showToolPopup: boolean = false;
     let activeShape: string | null = null;
     let tmpBlobUrl: string | null = null;
+    // Draggable tool-popup state
+    let popupPos = { x: 12, y: 44 }; // default position (will be updated on first open)
+    let isDraggingPopup = false;
+    let dragOffset = { x: 0, y: 0 };
+    let popupPositioned = false; // track if popup has been positioned (dragged or first open)
+    let editorContainerEl: HTMLElement | null = null;
     let canvasLoadError: string | null = null;
     // pending crop request if canvas not ready yet
     let pendingCropRequested: boolean = false;
@@ -353,9 +359,43 @@
             }
         } catch (e) {}
     });
+
+    // Drag handlers for tool-popup
+    function onPopupDragStart(e: MouseEvent) {
+        if ((e.target as HTMLElement).closest('.close')) return; // ignore close button
+        isDraggingPopup = true;
+        dragOffset = {
+            x: e.clientX - popupPos.x,
+            y: e.clientY - popupPos.y,
+        };
+        e.preventDefault();
+    }
+
+    function onPopupDragMove(e: MouseEvent) {
+        if (!isDraggingPopup) return;
+        popupPos = {
+            x: e.clientX - dragOffset.x,
+            y: e.clientY - dragOffset.y,
+        };
+    }
+
+    function onPopupDragEnd() {
+        isDraggingPopup = false;
+    }
+
+    // Calculate initial popup position based on editor container's viewport position
+    function updatePopupPosition() {
+        if (editorContainerEl) {
+            const rect = editorContainerEl.getBoundingClientRect();
+            popupPos = {
+                x: rect.left + 12,
+                y: rect.top + 44, // below the toolbar
+            };
+        }
+    }
 </script>
 
-<div class="editor-container">
+<div class="editor-container" bind:this={editorContainerEl}>
     {#if canvasLoadError}
         <div class="editor-error-overlay">
             <div class="editor-error-box">
@@ -401,6 +441,11 @@
                 'crop',
             ].includes(t);
             showToolPopup = hasSubmenu;
+            // Only update popup position on first open (before user drags it)
+            if (hasSubmenu && !popupPositioned) {
+                updatePopupPosition();
+                popupPositioned = true;
+            }
             if (canvasEditorRef && typeof canvasEditorRef.setTool === 'function') {
                 if (t === 'shape') {
                     const shapeType =
@@ -653,8 +698,18 @@
         </div>
 
         {#if activeTool && showToolPopup}
-            <div class="tool-popup" role="dialog" aria-label="Tool submenu">
-                <div class="tool-popup-header">
+            <!-- svelte-ignore a11y-no-static-element-interactions -->
+            <div
+                class="tool-popup"
+                role="dialog"
+                aria-label="Tool submenu"
+                style="left: {popupPos.x}px; top: {popupPos.y}px;"
+                on:mousemove={onPopupDragMove}
+                on:mouseup={onPopupDragEnd}
+                on:mouseleave={onPopupDragEnd}
+            >
+                <!-- svelte-ignore a11y-no-static-element-interactions -->
+                <div class="tool-popup-header" on:mousedown={onPopupDragStart}>
                     <div class="title">
                         {activeTool === 'shape'
                             ? activeShape === 'rect'
@@ -764,15 +819,14 @@
     }
 
     .tool-popup {
-        position: absolute;
-        top: 44px; /* below the toolbar */
-        left: 12px;
-        z-index: 70;
+        position: fixed;
+        z-index: 9999;
         min-width: 260px;
         background: rgba(255, 255, 255, 0.98);
         border: 1px solid rgba(0, 0, 0, 0.08);
         border-radius: 6px;
         box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+        user-select: none;
     }
     .tool-popup-header {
         display: flex;
@@ -780,6 +834,10 @@
         justify-content: space-between;
         padding: 8px 10px;
         border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+        cursor: grab;
+    }
+    .tool-popup-header:active {
+        cursor: grabbing;
     }
     .tool-popup .title {
         font-weight: 600;
