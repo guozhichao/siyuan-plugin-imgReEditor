@@ -10,6 +10,7 @@ import {
     Canvas,
     BasicTransformEvent,
     FabricObject,
+    Transform,
 } from 'fabric';
 
 /**
@@ -38,6 +39,27 @@ function createRotationCursorHandler(angleOffset: number) {
 }
 
 /**
+ * 自定义旋转处理器，支持 Shift 键吸附到 45° 倍数
+ */
+function rotationWithSnappingAndShift(eventData: TPointerEvent, transform: Transform, x: number, y: number) {
+    const target = transform.target;
+    if (!target) return controlsUtils.rotationWithSnapping(eventData, transform, x, y);
+
+    const centerBefore = target.getCenterPoint();
+    const result = controlsUtils.rotationWithSnapping(eventData, transform, x, y);
+
+    if (eventData.shiftKey) {
+        const angle = target.angle;
+        const snappedAngle = Math.round(angle / 45) * 45;
+        target.set('angle', snappedAngle);
+        target.setPositionByOrigin(centerBefore, 'center', 'center');
+        target.setCoords();
+    }
+
+    return result;
+}
+
+/**
  * 初始化
  */
 function initControlsRotate(canvas: Canvas) {
@@ -49,7 +71,7 @@ function initControlsRotate(canvas: Canvas) {
         offsetY: -10,
         offsetX: -10,
         actionName: 'rotate',
-        actionHandler: controlsUtils.rotationWithSnapping,
+        actionHandler: rotationWithSnappingAndShift,
         cursorStyleHandler: createRotationCursorHandler(0),
         render: () => false, // 明确表示不渲染此控件
     });
@@ -61,7 +83,7 @@ function initControlsRotate(canvas: Canvas) {
         offsetY: -10,
         offsetX: 10,
         actionName: 'rotate',
-        actionHandler: controlsUtils.rotationWithSnapping,
+        actionHandler: rotationWithSnappingAndShift,
         cursorStyleHandler: createRotationCursorHandler(90),
         render: () => false,
     });
@@ -73,7 +95,7 @@ function initControlsRotate(canvas: Canvas) {
         offsetY: 10,
         offsetX: 10,
         actionName: 'rotate',
-        actionHandler: controlsUtils.rotationWithSnapping,
+        actionHandler: rotationWithSnappingAndShift,
         cursorStyleHandler: createRotationCursorHandler(180),
         render: () => false,
     });
@@ -85,7 +107,7 @@ function initControlsRotate(canvas: Canvas) {
         offsetY: 10,
         offsetX: -10,
         actionName: 'rotate',
-        actionHandler: controlsUtils.rotationWithSnapping,
+        actionHandler: rotationWithSnappingAndShift,
         cursorStyleHandler: createRotationCursorHandler(270),
         render: () => false,
     });
