@@ -15,10 +15,10 @@ import {
 
 // 资源预加载
 // 将所有图像资源在模块顶层创建并赋值src，以便它们尽快开始加载。
-import verticalImg from '../../assets/editor/middlecontrol.svg';
-import horizontalImg from '../../assets/editor/middlecontrolhoz.svg';
-import edgeImg from '../../assets/editor/edgecontrol.svg';
-import rotateImg from '../../assets/editor/rotateicon.svg';
+import verticalImg from './assets/middlecontrol.svg';
+import horizontalImg from './assets/middlecontrolhoz.svg';
+import edgeImg from './assets/edgecontrol.svg';
+import rotateImg from './assets/rotateicon.svg';
 
 const verticalImgIcon = document.createElement('img');
 verticalImgIcon.src = verticalImg;
