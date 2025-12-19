@@ -2343,6 +2343,7 @@
         });
         selectCanvasSizeRect = null;
         selectCanvasSizeMode = false;
+        dispatch('selectCanvasSizeModeChanged', false);
         try {
             document.removeEventListener('keydown', _selectCanvasSizeKeyHandler as any);
         } catch (e) {}
