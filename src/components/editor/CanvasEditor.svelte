@@ -496,10 +496,15 @@
 
         dispatch('ready');
 
+
         // Attach basic history listeners (use typed scheduling for merging)
-        canvas.on('object:added', () => schedulePushWithType('added'));
+        canvas.on('object:added', (opt: any) => {
+            if (opt.target && (opt.target as any)._isCanvasBoundary) return;
+            schedulePushWithType('added');
+        });
         canvas.on('object:modified', (opt: any) => {
             const target = opt.target;
+            if (target && (target as any)._isCanvasBoundary) return;
             if (target && ['i-text', 'textbox', 'text'].includes(target.type)) {
                 if (target.scaleX !== 1 || target.scaleY !== 1) {
                     const newFontSize = Math.round(target.fontSize * target.scaleX);
@@ -2719,11 +2724,46 @@
                     actual._cropOffset = json.backgroundImage._cropOffset;
                     actual._appliedMargin = json.backgroundImage._appliedMargin;
                     actual._unborderedSrc = json.backgroundImage._unborderedSrc;
+                    actual._outerRadius = json.backgroundImage._outerRadius;
+                    actual._borderEnabled = json.backgroundImage._borderEnabled;
                 }
                 bg._originalSrc = json.backgroundImage._originalSrc;
                 bg._cropOffset = json.backgroundImage._cropOffset;
                 bg._appliedMargin = json.backgroundImage._appliedMargin;
                 bg._unborderedSrc = json.backgroundImage._unborderedSrc;
+                bg._outerRadius = json.backgroundImage._outerRadius;
+                bg._borderEnabled = json.backgroundImage._borderEnabled;
+            }
+
+            // For canvas mode, add boundary rectangle
+            if (isCanvasMode) {
+                const w = canvas.getWidth();
+                const h = canvas.getHeight();
+
+                // Remove any existing boundary
+                const existingBoundary = canvas.getObjects().find((o: any) => o._isCanvasBoundary);
+                if (existingBoundary) {
+                    canvas.remove(existingBoundary);
+                }
+
+                // Add new boundary rectangle
+                const boundaryRect = new Rect({
+                    left: 0,
+                    top: 0,
+                    width: w,
+                    height: h,
+                    fill: 'transparent',
+                    stroke: '#e0e0e0',
+                    strokeWidth: 2,
+                    strokeDashArray: [10, 5],
+                    selectable: false,
+                    evented: false,
+                    hoverCursor: 'default',
+                    excludeFromExport: true,
+                });
+                (boundaryRect as any)._isCanvasBoundary = true;
+                canvas.add(boundaryRect);
+                canvas.sendObjectToBack(boundaryRect);
             }
 
             restoreObjectSelectionStates();
@@ -3121,6 +3161,11 @@
             json.backgroundImage._unborderedSrc = bg._unborderedSrc;
             json.backgroundImage._outerRadius = bg._outerRadius;
             json.backgroundImage._borderEnabled = bg._borderEnabled;
+        }
+        
+        // Filter out canvas boundary objects from history to prevent them from being undone
+        if (json.objects) {
+            json.objects = json.objects.filter((obj: any) => !obj._isCanvasBoundary);
         }
         return json;
     }
