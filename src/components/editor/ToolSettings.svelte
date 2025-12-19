@@ -424,6 +424,96 @@
                 </div>
             </div>
         </div>
+    {:else if tool === 'image-border'}
+        <div class="row">
+            <label for="border-enabled">启用图片边框</label>
+            <input
+                id="border-enabled"
+                type="checkbox"
+                checked={settings.enabled !== false}
+                on:change={e => emitChange({ enabled: getChecked(e) })}
+            />
+        </div>
+        <div class="row">
+            <label for="border-bg-color">背景颜色</label>
+            <ColorPicker
+                colorKey="image-border-fill"
+                value={settings.fill || '#f1f5fd'}
+                {recentColors}
+                on:change={e => emitChange({ fill: e.detail })}
+                on:recentUpdate
+            />
+        </div>
+        <div class="row">
+            <label for="border-margin">边框间距</label>
+            <input
+                id="border-margin"
+                type="range"
+                min="0"
+                max="200"
+                value={settings.margin || 69}
+                on:input={e => emitChange({ margin: +getValue(e) })}
+            />
+            <span class="val">{settings.margin || 69}</span>
+        </div>
+        <div class="row">
+            <label for="border-radius">图片圆角</label>
+            <input
+                id="border-radius"
+                type="range"
+                min="0"
+                max="100"
+                value={settings.radius || 0}
+                on:input={e => emitChange({ radius: +getValue(e) })}
+            />
+            <span class="val">{settings.radius || 0}</span>
+        </div>
+        <div class="row">
+            <label for="border-outer-radius">边框圆角</label>
+            <input
+                id="border-outer-radius"
+                type="range"
+                min="0"
+                max="100"
+                value={settings.outerRadius || 0}
+                on:input={e => emitChange({ outerRadius: +getValue(e) })}
+            />
+            <span class="val">{settings.outerRadius || 0}</span>
+        </div>
+        <div class="row">
+            <label for="border-shadow">阴影大小</label>
+            <input
+                id="border-shadow"
+                type="range"
+                min="0"
+                max="100"
+                value={settings.shadowBlur || 20}
+                on:input={e => emitChange({ shadowBlur: +getValue(e) })}
+            />
+            <span class="val">{settings.shadowBlur || 20}</span>
+        </div>
+        <div class="row">
+            <label for="border-shadow-color">阴影颜色</label>
+            <ColorPicker
+                colorKey="image-border-shadow-color"
+                value={settings.shadowColor || '#000000'}
+                {recentColors}
+                on:change={e => emitChange({ shadowColor: e.detail })}
+                on:recentUpdate
+            />
+        </div>
+        <div class="row">
+            <label for="border-shadow-opacity">阴影透明度</label>
+            <input
+                id="border-shadow-opacity"
+                type="range"
+                min="0"
+                max="100"
+                value={Math.round((settings.shadowOpacity || 0.2) * 100)}
+                on:input={e => emitChange({ shadowOpacity: +getValue(e) / 100 })}
+            />
+            <span class="val">{Math.round((settings.shadowOpacity || 0.2) * 100)}%</span>
+        </div>
     {:else if tool === 'mosaic'}
         <div class="row">
             <label for="mosaic-size">马赛克大小</label>

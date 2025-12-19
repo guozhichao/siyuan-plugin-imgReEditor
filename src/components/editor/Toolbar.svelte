@@ -19,6 +19,7 @@
         class:active={active === 'hand'}
         class:b3-button--outline={active !== 'hand'}
         on:click={() => emit('tool', { tool: 'hand' })}
+        title="手型工具"
     >
         <svg class="icon" viewBox="0 0 24 24">
             <path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0" />
@@ -34,6 +35,7 @@
         class:active={active === 'select'}
         class:b3-button--outline={active !== 'select'}
         on:click={() => emit('tool', { tool: 'select' })}
+        title="选择工具"
     >
         <svg class="icon" viewBox="0 0 24 24">
             <path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z" />
@@ -45,6 +47,7 @@
         class:active={active === 'crop'}
         class:b3-button--outline={active !== 'crop'}
         on:click={() => emit('tool', { tool: 'crop' })}
+        title="裁剪工具"
     >
         <svg class="icon" viewBox="0 0 24 24">
             <path d="M6.13 1L6 16a2 2 0 0 0 2 2h15" />
@@ -59,6 +62,7 @@
             class:active={active === 'shape' && activeShape === 'rect'}
             class:b3-button--outline={!(active === 'shape' && activeShape === 'rect')}
             on:click={() => emit('tool', { tool: 'shape', shape: 'rect' })}
+            title="矩形"
         >
             <svg class="icon" viewBox="0 0 24 24">
                 <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
@@ -69,6 +73,7 @@
             class:active={active === 'shape' && activeShape === 'circle'}
             class:b3-button--outline={!(active === 'shape' && activeShape === 'circle')}
             on:click={() => emit('tool', { tool: 'shape', shape: 'circle' })}
+            title="圆形"
         >
             <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /></svg>
         </button>
@@ -78,6 +83,7 @@
         class:active={active === 'arrow'}
         class:b3-button--outline={active !== 'arrow'}
         on:click={() => emit('tool', { tool: 'arrow' })}
+        title="箭头"
     >
         <svg class="icon" viewBox="0 0 24 24">
             <path d="M5 12h14" />
@@ -89,6 +95,7 @@
         class:active={active === 'number-marker'}
         class:b3-button--outline={active !== 'number-marker'}
         on:click={() => emit('tool', { tool: 'number-marker' })}
+        title="数字标记"
     >
         <svg class="icon" viewBox="0 0 24 24">
             <circle cx="12" cy="12" r="10" />
@@ -100,6 +107,7 @@
         class:active={active === 'text'}
         class:b3-button--outline={active !== 'text'}
         on:click={() => emit('tool', { tool: 'text' })}
+        title="文本"
     >
         <svg class="icon" viewBox="0 0 24 24">
             <path d="M4 7V4h16v3" />
@@ -112,6 +120,7 @@
         class:active={active === 'brush'}
         class:b3-button--outline={active !== 'brush'}
         on:click={() => emit('tool', { tool: 'brush' })}
+        title="画笔"
     >
         <svg class="fill-icon" viewBox="0 0 1024 1024">
             <path
@@ -127,6 +136,7 @@
         class:active={active === 'eraser'}
         class:b3-button--outline={active !== 'eraser'}
         on:click={() => emit('tool', { tool: 'eraser' })}
+        title="橡皮擦"
     >
         <svg class="fill-icon" viewBox="0 0 1024 1024">
             <path
@@ -139,6 +149,7 @@
         class:active={active === 'mosaic'}
         class:b3-button--outline={active !== 'mosaic'}
         on:click={() => emit('tool', { tool: 'mosaic' })}
+        title="马赛克"
     >
         <svg class="fill-icon" viewBox="0 0 1024 1024">
             <path
@@ -148,9 +159,22 @@
     </button>
     <button
         class="b3-button"
+        class:active={active === 'image-border'}
+        class:b3-button--outline={active !== 'image-border'}
+        on:click={() => emit('tool', { tool: 'image-border' })}
+        title="图片边框"
+    >
+        <svg class="icon" viewBox="0 0 24 24">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+            <rect x="7" y="7" width="10" height="10" rx="1" ry="1" />
+        </svg>
+    </button>
+    <button
+        class="b3-button"
         class:active={active === 'transform'}
         class:b3-button--outline={active !== 'transform'}
         on:click={() => emit('tool', { tool: 'transform' })}
+        title="变换"
     >
         <svg class="fill-icon" viewBox="0 0 1024 1024">
             <path d="M1024 0v1024H0V0z" fill="#FFFFFF" fill-opacity=".01" />
@@ -159,27 +183,27 @@
             />
         </svg>
     </button>
-    <button class="b3-button b3-button--outline" on:click={() => emit('undo')} disabled={!canUndo}>
+    <button class="b3-button b3-button--outline" on:click={() => emit('undo')} disabled={!canUndo} title="撤销">
         <svg class="icon" viewBox="0 0 24 24">
             <path d="M3 7v6h6" />
             <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" />
         </svg>
     </button>
-    <button class="b3-button b3-button--outline" on:click={() => emit('redo')} disabled={!canRedo}>
+    <button class="b3-button b3-button--outline" on:click={() => emit('redo')} disabled={!canRedo} title="重做">
         <svg class="icon" viewBox="0 0 24 24">
             <path d="M21 7v6h-6" />
             <path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13" />
         </svg>
     </button>
     <div class="toolbar-spacer"></div>
-    <button class="b3-button b3-button--outline" on:click={() => emit('save')}>
+    <button class="b3-button b3-button--outline" on:click={() => emit('save')} title="保存">
         <svg class="icon" viewBox="0 0 24 24">
             <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
             <polyline points="17,21 17,13 7,13 7,21" />
             <polyline points="7,3 7,8 15,8" />
         </svg>
     </button>
-    <button class="b3-button b3-button--outline" on:click={() => emit('cancel')}>
+    <button class="b3-button b3-button--outline" on:click={() => emit('cancel')} title="取消">
         <svg class="icon" viewBox="0 0 24 24">
             <path d="M18 6L6 18" />
             <path d="M6 6l12 12" />

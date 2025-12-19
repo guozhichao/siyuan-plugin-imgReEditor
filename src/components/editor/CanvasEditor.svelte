@@ -59,15 +59,31 @@
         'radius', // for NumberMarker
         '_originalSrc',
         '_cropOffset',
+        '_isImageBorder',
+        '_appliedMargin',
+        '_unborderedSrc',
+        '_outerRadius',
+        '_borderEnabled',
     ];
     // Flag to prevent recursive history updates during undo/redo
     let isHistoryProcessing = false;
+
+    function getActualImage(bg: any = canvas?.backgroundImage) {
+        if (!bg) return null;
+        if (bg._isBorderGroup) return bg._mainImage;
+        if (bg._unborderedImage) return bg._unborderedImage;
+        return bg;
+    }
 
     function restoreObjectSelectionStates() {
         if (!canvas) return;
         try {
             canvas.getObjects().forEach((obj: any) => {
-                if (obj._isCropRect || (canvas && obj === canvas.backgroundImage)) {
+                if (
+                    obj._isCropRect ||
+                    obj._isImageBorder ||
+                    (canvas && obj === canvas.backgroundImage)
+                ) {
                     obj.selectable = false;
                     obj.evented = false;
                 } else {
@@ -163,11 +179,12 @@
         try {
             if (!canvas) return;
             // Use the same logic as toJSON to include background metadata
-            let json = canvas.toJSON(HISTORY_PROPS);
+            let json = (canvas as any).toJSON(HISTORY_PROPS);
             if (canvas.backgroundImage && json.backgroundImage) {
                 const bg = canvas.backgroundImage as any;
-                if (bg._originalSrc) json.backgroundImage._originalSrc = bg._originalSrc;
-                if (bg._cropOffset) json.backgroundImage._cropOffset = bg._cropOffset;
+                const actual = getActualImage(bg);
+                json.backgroundImage._originalSrc = actual?._originalSrc || bg._originalSrc;
+                json.backgroundImage._cropOffset = actual?._cropOffset || bg._cropOffset;
             }
 
             // If recent changes are rapid modifications, merge them into the last step
@@ -1395,6 +1412,20 @@
             activeToolOptions.bold = !!activeToolOptions.bold;
             activeToolOptions.italic = !!activeToolOptions.italic;
         }
+        if (tool === 'image-border') {
+            const opts = {
+                fill: options.fill || '#f3f4f6',
+                margin: options.margin ?? 40,
+                radius: options.radius ?? 12,
+                shadowBlur: options.shadowBlur ?? 20,
+                shadowColor: options.shadowColor || '#000000',
+                shadowOpacity: options.shadowOpacity ?? 0.2,
+                ...options,
+            };
+            activeToolOptions = opts;
+            // No await here to keep setTool sync, updateImageBorder handles its own async if needed
+            updateImageBorder(opts);
+        }
         // update cursor
         if (canvas) {
             if (tool === 'shape') canvas.defaultCursor = 'crosshair';
@@ -2142,7 +2173,8 @@
             const bg = canvas.backgroundImage;
             if (bg) {
                 // Get the actual bounding box of the background image (handles flip and rotate)
-                const boundingRect = bg.getBoundingRect();
+                let boundingRect = bg.getBoundingRect();
+
                 const imgW = boundingRect.width;
                 const imgH = boundingRect.height;
                 const imgCenterX = boundingRect.left + imgW / 2;
@@ -2161,16 +2193,183 @@
         }
     }
 
+    async function updateImageBorder(options: any) {
+        if (!canvas || !canvas.backgroundImage) return;
+
+        const bg = canvas.backgroundImage as any;
+
+        // 1. Identify/Prepare mainImage (the one without the current border)
+        let mainImage: any = bg._unborderedImage;
+
+        // If we don't have the unbordered image in memory (e.g. just loaded or first time)
+        if (!mainImage) {
+            if (bg._isBorderGroup) {
+                mainImage = bg._mainImage;
+            } else if (bg._unborderedSrc) {
+                // Load from source
+                const enlivened = await util.enlivenObjects([
+                    {
+                        type: 'image',
+                        src: bg._unborderedSrc,
+                    },
+                ]);
+                if (enlivened && enlivened[0]) {
+                    mainImage = enlivened[0];
+                }
+            } else if (bg._appliedMargin === undefined) {
+                // Current background is the unbordered one
+                mainImage = bg;
+            }
+        }
+
+        if (!mainImage) return;
+
+        const enabled = options.enabled !== false;
+        const margin = enabled ? Number(options.margin ?? 40) : 0;
+        const radius = Number(options.radius ?? 0);
+        const outerRadius = Number(options.outerRadius ?? 0);
+        const fill = options.fill ?? '#f3f4f6';
+        const shadowBlur = Number(options.shadowBlur ?? 20);
+        const shadowColor = options.shadowColor ?? '#000000';
+        const shadowOpacity = Number(options.shadowOpacity ?? 0.2);
+
+        // 2. Create baked image on temp canvas
+        // We use the bounding rect of the main image because it might be already cropped or transformed
+        const br = mainImage.getBoundingRect();
+        const sw = Math.round(br.width);
+        const sh = Math.round(br.height);
+        const tw = sw + margin * 2;
+        const th = sh + margin * 2;
+
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = tw;
+        tempCanvas.height = th;
+        const ctx = tempCanvas.getContext('2d');
+        if (!ctx) return;
+
+        // Draw background
+        if (outerRadius > 0) {
+            ctx.save();
+            ctx.beginPath();
+            if ((ctx as any).roundRect) {
+                (ctx as any).roundRect(0, 0, tw, th, outerRadius);
+            } else {
+                ctx.rect(0, 0, tw, th);
+            }
+            ctx.clip();
+            ctx.fillStyle = fill;
+            ctx.fillRect(0, 0, tw, th);
+            ctx.restore();
+        } else {
+            ctx.fillStyle = fill;
+            ctx.fillRect(0, 0, tw, th);
+        }
+
+        // Draw image content with shadow and rounding
+        ctx.save();
+        ctx.translate(margin, margin);
+
+        // 1. Draw the shadow by filling a rounded rect before clipping
+        if (shadowOpacity > 0 && shadowBlur > 0) {
+            ctx.save();
+            ctx.shadowColor = colorWithOpacity(shadowColor, shadowOpacity) || 'rgba(0,0,0,0.2)';
+            ctx.shadowBlur = shadowBlur;
+            ctx.shadowOffsetX = 0;
+            ctx.shadowOffsetY = 0;
+            ctx.fillStyle = fill; // Use background color to avoid color bleeding if image has slight transparency
+
+            ctx.beginPath();
+            if (radius > 0 && (ctx as any).roundRect) {
+                (ctx as any).roundRect(0, 0, sw, sh, radius);
+            } else {
+                ctx.rect(0, 0, sw, sh);
+            }
+            ctx.fill();
+            ctx.restore();
+        }
+
+        // 2. Clip for rounded corners if needed
+        if (radius > 0) {
+            ctx.beginPath();
+            if ((ctx as any).roundRect) {
+                (ctx as any).roundRect(0, 0, sw, sh, radius);
+            } else {
+                ctx.rect(0, 0, sw, sh);
+            }
+            ctx.clip();
+        }
+
+        // 3. Draw the image content
+        ctx.translate(-br.left, -br.top);
+        mainImage.render(ctx);
+        ctx.restore();
+
+        // 3. Update Canvas
+        const oldMargin = bg._appliedMargin || 0;
+        // If the current background was never baked (no _appliedMargin),
+        // its "content" starts at its own bounding rect.
+        // If it WAS baked, its content started at oldMargin.
+        const globalShiftX = margin - (bg._appliedMargin !== undefined ? oldMargin : br.left);
+        const globalShiftY = margin - (bg._appliedMargin !== undefined ? oldMargin : br.top);
+
+        // Shift objects to follow the content
+        if (globalShiftX !== 0 || globalShiftY !== 0) {
+            canvas.getObjects().forEach((obj: any) => {
+                if (obj === bg || obj._isCropRect || obj._isImageBorder) return;
+                obj.left = (obj.left || 0) + globalShiftX;
+                obj.top = (obj.top || 0) + globalShiftY;
+                obj.setCoords();
+            });
+        }
+
+        const newImg = new FabricImage(tempCanvas, {
+            left: 0,
+            top: 0,
+            selectable: false,
+            evented: false,
+        });
+
+        // Transfer/Set metadata
+        (newImg as any)._originalSrc = mainImage._originalSrc || bg._originalSrc;
+        (newImg as any)._cropOffset = mainImage._cropOffset || bg._cropOffset;
+        (newImg as any)._unborderedImage = mainImage;
+        (newImg as any)._appliedMargin = margin;
+        (newImg as any)._unborderedSrc = mainImage.toDataURL
+            ? mainImage.toDataURL()
+            : mainImage.src;
+        (newImg as any)._outerRadius = outerRadius;
+        (newImg as any)._borderEnabled = enabled;
+
+        if (!enabled) {
+            newImg.set({
+                left: br.left,
+                top: br.top,
+                scaleX: mainImage.scaleX,
+                scaleY: mainImage.scaleY,
+                angle: mainImage.angle,
+                flipX: mainImage.flipX,
+                flipY: mainImage.flipY,
+            });
+            (newImg as any)._appliedMargin = undefined;
+        }
+
+        canvas.backgroundImage = newImg;
+        canvas.requestRenderAll();
+
+        schedulePushWithType('modified');
+    }
+
     function pushInitialHistory() {
         try {
             if (!canvas) return;
             history = [];
             historyIndex = -1;
-            const json = canvas.toJSON(HISTORY_PROPS);
+            const json = (canvas as any).toJSON(HISTORY_PROPS);
             if (canvas.backgroundImage && json.backgroundImage) {
                 const bg = canvas.backgroundImage as any;
-                if (bg._originalSrc) json.backgroundImage._originalSrc = bg._originalSrc;
-                if (bg._cropOffset) json.backgroundImage._cropOffset = bg._cropOffset;
+                const actual = getActualImage(bg);
+                json.backgroundImage._originalSrc = actual?._originalSrc || bg._originalSrc;
+                json.backgroundImage._cropOffset = actual?._cropOffset || bg._cropOffset;
             }
             history.push(json);
             historyIndex = 0;
@@ -2276,8 +2475,21 @@
             // Manually restore metadata to the background image
             if (canvas.backgroundImage && json.backgroundImage) {
                 const bg = canvas.backgroundImage as any;
+                const actual = getActualImage(bg);
+                if (actual) {
+                    actual._originalSrc = json.backgroundImage._originalSrc;
+                    actual._cropOffset = json.backgroundImage._cropOffset;
+                    actual._appliedMargin = json.backgroundImage._appliedMargin;
+                    actual._unborderedSrc = json.backgroundImage._unborderedSrc;
+                    actual._outerRadius = json.backgroundImage._outerRadius;
+                    actual._borderEnabled = json.backgroundImage._borderEnabled;
+                }
                 bg._originalSrc = json.backgroundImage._originalSrc;
                 bg._cropOffset = json.backgroundImage._cropOffset;
+                bg._appliedMargin = json.backgroundImage._appliedMargin;
+                bg._unborderedSrc = json.backgroundImage._unborderedSrc;
+                bg._outerRadius = json.backgroundImage._outerRadius;
+                bg._borderEnabled = json.backgroundImage._borderEnabled;
             }
 
             restoreObjectSelectionStates();
@@ -2308,8 +2520,17 @@
             // Manually restore metadata to the background image
             if (canvas.backgroundImage && json.backgroundImage) {
                 const bg = canvas.backgroundImage as any;
+                const actual = getActualImage(bg);
+                if (actual) {
+                    actual._originalSrc = json.backgroundImage._originalSrc;
+                    actual._cropOffset = json.backgroundImage._cropOffset;
+                    actual._appliedMargin = json.backgroundImage._appliedMargin;
+                    actual._unborderedSrc = json.backgroundImage._unborderedSrc;
+                }
                 bg._originalSrc = json.backgroundImage._originalSrc;
                 bg._cropOffset = json.backgroundImage._cropOffset;
+                bg._appliedMargin = json.backgroundImage._appliedMargin;
+                bg._unborderedSrc = json.backgroundImage._unborderedSrc;
             }
 
             restoreObjectSelectionStates();
@@ -2326,7 +2547,8 @@
     export function getCropData() {
         if (!canvas || !canvas.backgroundImage) return null;
         const bg = canvas.backgroundImage as any;
-        const offset = bg._cropOffset;
+        const actual = getActualImage(bg);
+        const offset = actual?._cropOffset || bg._cropOffset;
         // If there's no offset, or offset is at origin (0,0), the image is not cropped
         // _originalSrc existing doesn't mean cropped - it's set on initial load too
         if (!offset || (offset.x === 0 && offset.y === 0)) return null;
@@ -2535,6 +2757,10 @@
                         }
                         o.setCoords && o.setCoords();
                     }
+                    // Update image border settings if the tool is active
+                    if (activeTool === 'image-border') {
+                        updateImageBorder(options);
+                    }
                 } catch (e) {}
             });
             canvas.requestRenderAll();
@@ -2567,18 +2793,17 @@
             canvas.renderAll(); // Ensure coords are updated
 
             // 2. Measure background at 100% scale
-            const boundingRect = bg.getBoundingRect();
-            const imgW = boundingRect.width;
-            const imgH = boundingRect.height;
+            let exportRect = bg.getBoundingRect();
+
+            const imgW = exportRect.width;
+            const imgH = exportRect.height;
 
             // 3. Resize canvas to fit full image
             canvas.setDimensions({ width: imgW, height: imgH });
 
-            // 4. Align image to top-left (0,0) of the export canvas
-            // boundingRect.left/top might be non-zero if centered or rotated
-            // We shift viewport so the bounding box top-left moves to 0,0
-            const tx = -boundingRect.left;
-            const ty = -boundingRect.top;
+            // 4. Align image/border to top-left (0,0) of the export canvas
+            const tx = -exportRect.left;
+            const ty = -exportRect.top;
 
             canvas.setViewportTransform([1, 0, 0, 1, tx, ty]);
             canvas.renderAll();
@@ -2605,8 +2830,13 @@
         const json = (canvas as any).toJSON(HISTORY_PROPS);
         if (canvas.backgroundImage && json.backgroundImage) {
             const bg = canvas.backgroundImage as any;
-            json.backgroundImage._originalSrc = bg._originalSrc;
-            json.backgroundImage._cropOffset = bg._cropOffset;
+            const actual = getActualImage(bg);
+            json.backgroundImage._originalSrc = actual?._originalSrc || bg._originalSrc;
+            json.backgroundImage._cropOffset = actual?._cropOffset || bg._cropOffset;
+            json.backgroundImage._appliedMargin = bg._appliedMargin;
+            json.backgroundImage._unborderedSrc = bg._unborderedSrc;
+            json.backgroundImage._outerRadius = bg._outerRadius;
+            json.backgroundImage._borderEnabled = bg._borderEnabled;
         }
         return json;
     }
@@ -2623,8 +2853,17 @@
             // Manually restore metadata to the background image
             if (canvas.backgroundImage && json.backgroundImage) {
                 const bg = canvas.backgroundImage as any;
+                const actual = getActualImage(bg);
+                if (actual) {
+                    actual._originalSrc = json.backgroundImage._originalSrc;
+                    actual._cropOffset = json.backgroundImage._cropOffset;
+                    actual._appliedMargin = json.backgroundImage._appliedMargin;
+                    actual._unborderedSrc = json.backgroundImage._unborderedSrc;
+                }
                 bg._originalSrc = json.backgroundImage._originalSrc;
                 bg._cropOffset = json.backgroundImage._cropOffset;
+                bg._appliedMargin = json.backgroundImage._appliedMargin;
+                bg._unborderedSrc = json.backgroundImage._unborderedSrc;
             }
 
             // After loading, ensure all objects (except background) are selectable and evented

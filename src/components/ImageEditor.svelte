@@ -464,6 +464,7 @@
                 'transform',
                 'number-marker',
                 'crop',
+                'image-border',
             ].includes(t);
             showToolPopup = hasSubmenu;
             // Only update popup position on first open (before user drags it)
@@ -842,6 +843,8 @@
                             裁剪设置
                         {:else if activeTool === 'mosaic'}
                             马赛克设置
+                        {:else if activeTool === 'image-border'}
+                            图片边框
                         {:else}
                             {activeTool}
                         {/if}
