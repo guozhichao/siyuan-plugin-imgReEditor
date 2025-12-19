@@ -252,6 +252,7 @@
                 o.toObject([
                     'selectable',
                     'evented',
+                    'erasable',
                     '_isArrow',
                     'arrowHead',
                     'count',
@@ -330,6 +331,9 @@
                     if (data && data._isArrow) {
                         (o as any)._isArrow = true;
                     }
+                    if (data && data.erasable !== undefined) {
+                        (o as any).erasable = data.erasable;
+                    }
 
                     canvas.add(o);
                     added.push(o);
@@ -342,6 +346,7 @@
                         const group = new Group(added, {
                             selectable: true,
                             evented: true,
+                            erasable: true,
                         });
                         canvas.add(group);
                         canvas.setActiveObject(group);
