@@ -181,7 +181,7 @@
                 id="arrow-width"
                 type="range"
                 min="1"
-                max="20"
+                max="50"
                 value={settings.strokeWidth || 4}
                 on:input={e => emitChange({ strokeWidth: +getValue(e) })}
             />

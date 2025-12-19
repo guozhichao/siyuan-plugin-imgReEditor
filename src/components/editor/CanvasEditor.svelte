@@ -420,29 +420,11 @@
                 if (target.scaleX !== 1 || target.scaleY !== 1) {
                     const arrow = target as any;
                     const visualStrokeWidth = Math.round(arrow.getVisualStrokeWidth());
-
-                    // Get visual endpoints in absolute canvas coordinates
-                    const p1 = { x: arrow.x1, y: arrow.y1 };
-                    const p2 = { x: arrow.x2, y: arrow.y2 };
-                    const matrix = arrow.calcTransformMatrix();
-                    const vP1 = util.transformPoint(p1 as Point, matrix);
-                    const vP2 = util.transformPoint(p2 as Point, matrix);
-
                     // Reset scaling and update coordinates
                     arrow.set({
-                        scaleX: 1,
-                        scaleY: 1,
                         strokeWidth: visualStrokeWidth,
-                        x1: vP1.x,
-                        y1: vP1.y,
-                        x2: vP2.x,
-                        y2: vP2.y,
-                        left: 0,
-                        top: 0,
                     });
-                    if (typeof arrow._setWidthHeight === 'function') {
-                        arrow._setWidthHeight();
-                    }
+
                     arrow.setCoords();
 
                     // Update UI
