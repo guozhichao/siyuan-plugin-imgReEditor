@@ -1,7 +1,8 @@
 <script lang="ts">
     import { createEventDispatcher, onMount } from 'svelte';
+    import ColorPicker from 'svelte-awesome-color-picker';
 
-    export let value: string = '#ff0000';
+    export let value: string | null = '#ff0000';
     export let colorKey: string = 'default'; // unique key for this color picker to store recent colors
     export let recentColors: Record<string, string[]> = {}; // passed from parent, keyed by colorKey
     export let maxRecent: number = 8;
@@ -9,7 +10,7 @@
     const dispatch = createEventDispatcher();
 
     let showPopup = false;
-    let inputRef: HTMLInputElement | null = null;
+    let showAwesomePicker = false;
 
     // Default color palette
     const defaultColors = [
@@ -29,6 +30,8 @@
 
     // Get recent colors for this picker
     $: myRecentColors = (recentColors && recentColors[colorKey]) || [];
+
+    $: displayValue = value || '#ff0000';
 
     function selectColor(color: string) {
         value = color;
@@ -60,29 +63,15 @@
     }
 
     function openNativePicker() {
-        if (inputRef) {
-            inputRef.click();
-        }
-    }
-
-    function handleNativeInput(e: Event) {
-        const newColor = (e.target as HTMLInputElement).value;
-        value = newColor;
-        dispatch('change', newColor);
-    }
-
-    function handleNativeChange(e: Event) {
-        const newColor = (e.target as HTMLInputElement).value;
-        value = newColor;
-        dispatch('change', newColor);
-        showPopup = false;
-        addToRecent(newColor);
+        showAwesomePicker = true;
     }
 
     function handleClickOutside(e: MouseEvent) {
         const target = e.target as HTMLElement;
-        if (!target.closest('.color-picker-container')) {
+        if (!target.closest('.color-picker-container') && !target.closest('.awesome-popup')) {
+            addToRecent(value);
             showPopup = false;
+            showAwesomePicker = false;
         }
     }
 
@@ -97,7 +86,7 @@
 <div class="color-picker-container">
     <button
         class="color-preview"
-        style="background-color: {value};"
+        style="background-color: {displayValue};"
         on:click|stopPropagation={() => (showPopup = !showPopup)}
         title="选择颜色"
     >
@@ -115,7 +104,7 @@
                         {#each myRecentColors as color}
                             <button
                                 class="color-swatch"
-                                class:selected={value.toLowerCase() === color.toLowerCase()}
+                                class:selected={displayValue.toLowerCase() === color.toLowerCase()}
                                 style="background-color: {color};"
                                 on:click={() => selectColor(color)}
                                 title={color}
@@ -131,7 +120,7 @@
                     {#each defaultColors as color}
                         <button
                             class="color-swatch"
-                            class:selected={value.toLowerCase() === color.toLowerCase()}
+                            class:selected={displayValue.toLowerCase() === color.toLowerCase()}
                             style="background-color: {color};"
                             on:click={() => selectColor(color)}
                             title={color}
@@ -149,15 +138,22 @@
         </div>
     {/if}
 
-    <input
-        bind:this={inputRef}
-        type="color"
-        {value}
-        on:input={handleNativeInput}
-        on:change={handleNativeChange}
-        class="hidden-input"
-    />
+    <!-- native input removed, using svelte-awesome-color-picker -->
 </div>
+
+{#if showAwesomePicker}
+    <div class="awesome-popup">
+        <button class="close-btn" on:click={() => { addToRecent(value); showAwesomePicker = false; }} title="关闭">×</button>
+        <ColorPicker
+            isDialog={false}
+            isAlpha={false}
+            bind:hex={value}
+            on:input={(e) => {
+                dispatch('change', e.detail.hex);
+            }}
+        />
+    </div>
+{/if}
 
 <style>
     .color-picker-container {
@@ -275,11 +271,38 @@
         font-size: 14px;
     }
 
-    .hidden-input {
+    .awesome-popup {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 10000;
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 8px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .close-btn {
         position: absolute;
-        width: 0;
-        height: 0;
-        opacity: 0;
-        pointer-events: none;
+        top: 4px;
+        right: 4px;
+        width: 20px;
+        height: 20px;
+        border: none;
+        background: transparent;
+        cursor: pointer;
+        font-size: 16px;
+        color: #666;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        transition: background 0.15s;
+    }
+
+    .close-btn:hover {
+        background: #f0f0f0;
     }
 </style>
