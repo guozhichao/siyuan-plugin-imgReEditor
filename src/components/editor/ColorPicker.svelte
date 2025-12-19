@@ -143,12 +143,21 @@
 
 {#if showAwesomePicker}
     <div class="awesome-popup">
-        <button class="close-btn" on:click={() => { addToRecent(value); showAwesomePicker = false; }} title="关闭">×</button>
+        <button
+            class="close-btn"
+            on:click={() => {
+                addToRecent(value);
+                showAwesomePicker = false;
+            }}
+            title="关闭"
+        >
+            ×
+        </button>
         <ColorPicker
             isDialog={false}
             isAlpha={false}
             bind:hex={value}
-            on:input={(e) => {
+            on:input={e => {
                 dispatch('change', e.detail.hex);
             }}
         />
