@@ -21,6 +21,8 @@ Edit images within SiYuan Notes, supporting:
 -   Crop, flip images, add text, add rectangles/ellipses, add arrows, add numbered labels, brush tool, and other functions.
 -   Saved PNG images support re-editing of modifications and annotations added by the plugin.
 
+![](https://fastly.jsdelivr.net/gh/Achuan-2/PicBed/assets/20251219121547-2025-12-19.png)
+
 **Keyboard Shortcuts**
 -   **Esc**:
     -   Deselect a selected shape.
