@@ -3026,7 +3026,7 @@
             const result = canvas.toDataURL({
                 format: options.format as any,
                 quality: options.quality,
-                multiplier: 1,
+                multiplier: isCanvasMode ? 3 : 1,
                 enableRetinaScaling: false,
             });
 
