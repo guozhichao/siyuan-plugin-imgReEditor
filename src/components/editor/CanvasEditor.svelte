@@ -18,16 +18,16 @@
         Color,
     } from 'fabric';
     import { EraserBrush } from '@erase2d/fabric';
-    import MosaicRect from './MosaicRect';
-    import Arrow from './Arrow';
-    import NumberMarker from './NumberMarker';
-    import CropRect from './CropRect';
-    import SelectCanvasSizeRect from './SelectCanvasSizeRect';
+    import MosaicRect from './custom/MosaicRect';
+    import Arrow from './custom/Arrow';
+    import NumberMarker from './custom/NumberMarker';
+    import CropRect from './custom/CropRect';
+    import SelectCanvasSizeRect from './custom/SelectCanvasSizeRect';
     import initControls, {
         createCropControls,
         createSelectCanvasSizeControls,
-    } from './initControls';
-    import initControlsRotate from './initControlsRotate';
+    } from './custom/initControls';
+    import initControlsRotate from './custom/initControlsRotate';
 
     export let dataURL: string | null = null;
     export let fileName: string | undefined;

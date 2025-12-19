@@ -11,7 +11,7 @@ import {
     TPointerEvent,
     Transform,
 } from 'fabric';
-import edgeImg from './assets/edgecontrol.svg';
+import edgeImg from '../assets/edgecontrol.svg';
 
 const edgeImgIcon = document.createElement('img');
 edgeImgIcon.src = edgeImg;
