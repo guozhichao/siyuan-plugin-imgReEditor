@@ -22,6 +22,7 @@
     },
     "imageEditor": {
         "editImage": "编辑图片",
+        "createCanvas": "创建画布 (ImgReEditor)",
         "saveSuccess": "图片已保存",
         "saveFailed": "保存失败"
     }

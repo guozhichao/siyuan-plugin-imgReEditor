@@ -28,6 +28,7 @@
     export let dataURL: string | null = null;
     export let fileName: string | undefined;
     export let blobURL: string | null = null;
+    export let isCanvasMode = false;
     // active tool state
     let activeTool: string | null = null;
     let activeToolOptions: any = {};
@@ -238,7 +239,7 @@
 
     // Clipboard for copy/paste
     let clipboard: any[] = [];
-    function copySelectedObjects() {
+    async function copySelectedObjects() {
         try {
             if (!canvas) return;
             const objs = (canvas.getActiveObjects && canvas.getActiveObjects()) || [];
@@ -278,6 +279,23 @@
                     'radius',
                 ])
             );
+
+            // Write to system clipboard to mark that we have canvas shapes
+            // This allows us to detect if the latest clipboard content is shapes or images
+            // Use text/plain with a special marker since custom MIME types are not supported
+            try {
+                const jsonData = JSON.stringify(clipboard);
+                const markedData = '__CANVAS_SHAPES__' + jsonData;
+                const blob = new Blob([markedData], { type: 'text/plain' });
+                await navigator.clipboard.write([
+                    new ClipboardItem({
+                        'text/plain': blob,
+                    }),
+                ]);
+            } catch (err) {
+                // If clipboard write fails, silently ignore (internal clipboard still works)
+                console.warn('CanvasEditor: failed to write shapes to system clipboard', err);
+            }
 
             try {
                 dispatch('copied', { count: allowed.length });
@@ -376,6 +394,74 @@
                 console.warn('CanvasEditor: paste failed', e);
             }
         } catch (e) {}
+    }
+
+    // Handle paste from keyboard shortcut (Ctrl+V)
+    async function handlePaste() {
+        try {
+            if (!canvas) return;
+
+            // Check system clipboard to determine what to paste
+            try {
+                const clipboardData = await navigator.clipboard.read();
+
+                let hasShapes = false;
+                let hasImage = false;
+
+                // First pass: check what types are available
+                for (const item of clipboardData) {
+                    // Check if clipboard contains text with our special marker
+                    if (item.types.includes('text/plain')) {
+                        try {
+                            const textBlob = await item.getType('text/plain');
+                            const text = await textBlob.text();
+                            if (text.startsWith('__CANVAS_SHAPES__')) {
+                                hasShapes = true;
+                                break;
+                            }
+                        } catch (e) {
+                            // Ignore text read errors
+                        }
+                    }
+
+                    for (const type of item.types) {
+                        if (type.startsWith('image/')) {
+                            hasImage = true;
+                            break;
+                        }
+                    }
+                    if (hasImage) break;
+                }
+
+                // Prioritize shapes if available (user copied shapes in canvas)
+                if (hasShapes) {
+                    pasteClipboard();
+                    return;
+                }
+
+                // Otherwise, paste image if available
+                if (hasImage) {
+                    for (const item of clipboardData) {
+                        for (const type of item.types) {
+                            if (type.startsWith('image/')) {
+                                const blob = await item.getType(type);
+                                const url = URL.createObjectURL(blob);
+                                addFabricImageFromURL(url);
+                                return;
+                            }
+                        }
+                    }
+                }
+            } catch (err) {
+                // If clipboard API fails, fall back to internal clipboard
+                console.warn('CanvasEditor: clipboard read failed, using internal clipboard', err);
+                if (clipboard && clipboard.length > 0) {
+                    pasteClipboard();
+                }
+            }
+        } catch (err) {
+            console.warn('CanvasEditor: handlePaste failed', err);
+        }
     }
 
     onMount(() => {
@@ -534,7 +620,7 @@
             } else if (key === 'v') {
                 e.preventDefault();
                 e.stopPropagation();
-                pasteClipboard();
+                handlePaste(e);
             } else if (key === 'z') {
                 e.preventDefault();
                 e.stopPropagation();
@@ -933,6 +1019,14 @@
         const handleSelectionChange = () => {
             try {
                 const active = canvas?.getActiveObject?.();
+
+                // Ignore canvas boundary rectangle
+                if (active && (active as any)._isCanvasBoundary) {
+                    canvas.discardActiveObject();
+                    canvas.requestRenderAll();
+                    return;
+                }
+
                 if (!active) {
                     dispatch('selection', { options: null });
                     return;
@@ -1006,6 +1100,13 @@
                 if (tempArrow && active !== tempArrow) return;
                 if (isDrawingMosaic && active !== tempMosaic) return;
                 if (isDrawingShape && active !== tempShape) return;
+
+                // Ignore canvas boundary rectangle
+                if (active && (active as any)._isCanvasBoundary) {
+                    canvas.discardActiveObject();
+                    canvas.requestRenderAll();
+                    return;
+                }
 
                 if (!active) {
                     dispatch('selection', { options: null, type: null });
@@ -1357,12 +1458,17 @@
         pushHistory();
 
         if (dataURL) loadImageFromURL(dataURL, fileName);
+        else if (isCanvasMode) loadImageFromURL('', fileName);
     });
 
     // Reactive statement to load image when dataURL changes (fixes race condition on first load)
     // Only load if image hasn't been loaded yet to prevent clearing canvas on state changes
-    $: if (canvas && dataURL && !imageLoaded) {
-        loadImageFromURL(dataURL, fileName);
+    $: if (canvas && !imageLoaded) {
+        if (dataURL) {
+            loadImageFromURL(dataURL, fileName);
+        } else if (isCanvasMode) {
+            loadImageFromURL('', fileName);
+        }
     }
 
     onDestroy(() => {
@@ -2030,6 +2136,40 @@
 
     export async function loadImageFromURL(url: string, name?: string) {
         if (!canvas) return;
+        if (!url && isCanvasMode) {
+            // Initialize default blank canvas size
+            const imgW = 800;
+            const imgH = 600;
+            canvas.setDimensions({ width: imgW, height: imgH });
+
+            // Set a neutral background color for canvas mode
+            canvas.backgroundColor = '#ffffff';
+
+            // Add a boundary rectangle to show canvas bounds
+            const boundaryRect = new Rect({
+                left: 0,
+                top: 0,
+                width: imgW,
+                height: imgH,
+                fill: 'transparent',
+                stroke: '#e0e0e0',
+                strokeWidth: 2,
+                strokeDashArray: [10, 5],
+                selectable: false,
+                evented: false,
+                excludeFromExport: true,
+            });
+            (boundaryRect as any)._isCanvasBoundary = true;
+            canvas.add(boundaryRect);
+
+            canvas.requestRenderAll();
+
+            imageLoaded = true;
+            try {
+                pushInitialHistory();
+            } catch (e) {}
+            return;
+        }
         return new Promise<void>((resolve, reject) => {
             try {
                 // Use HTMLImageElement to get reliable success/error events (better for data URLs and local blobs)
@@ -2141,9 +2281,10 @@
         const w = canvas.getWidth();
         const h = canvas.getHeight();
 
+        // For canvas mode, always use custom size mode to show the full canvas with boundaries
         // Check if canvas dimensions match workspace (Uncropped / Artboard mode)
-        // or if we have a custom size (Cropped / True Resolution mode)
-        const isCustomSize = Math.abs(w - cw) > 2 || Math.abs(h - ch) > 2;
+        // or if we have a custom size (Cropped / True Resolution mode / Canvas mode)
+        const isCustomSize = isCanvasMode || Math.abs(w - cw) > 2 || Math.abs(h - ch) > 2;
 
         if (isCustomSize) {
             // Custom Size Mode: Use CSS scaling
@@ -2785,7 +2926,9 @@
     export function toDataURL(
         options: { format?: string; quality?: number } = { format: 'png', quality: 1 }
     ) {
-        if (!canvas || !canvas.backgroundImage) return null;
+        if (!canvas) return null;
+
+        if (!isCanvasMode && !canvas.backgroundImage) return null;
 
         const bg = canvas.backgroundImage;
 
@@ -2805,29 +2948,54 @@
             canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
             canvas.renderAll(); // Ensure coords are updated
 
-            // 2. Measure background at 100% scale
-            let exportRect = bg.getBoundingRect();
+            let imgW, imgH, tx, ty;
 
-            const imgW = exportRect.width;
-            const imgH = exportRect.height;
+            if (isCanvasMode && !bg) {
+                // Export entire canvas area
+                imgW = canvas.getWidth();
+                imgH = canvas.getHeight();
+                tx = 0;
+                ty = 0;
+            } else {
+                // 2. Measure background at 100% scale
+                let exportRect = bg.getBoundingRect();
+
+                imgW = exportRect.width;
+                imgH = exportRect.height;
+
+                // 4. Align image/border to top-left (0,0) of the export canvas
+                tx = -exportRect.left;
+                ty = -exportRect.top;
+            }
 
             // 3. Resize canvas to fit full image
             canvas.setDimensions({ width: imgW, height: imgH });
 
-            // 4. Align image/border to top-left (0,0) of the export canvas
-            const tx = -exportRect.left;
-            const ty = -exportRect.top;
-
             canvas.setViewportTransform([1, 0, 0, 1, tx, ty]);
+
+            // Temporarily hide boundary rectangle for export
+            const boundaryRect = canvas.getObjects().find((o: any) => o._isCanvasBoundary);
+            const boundaryWasVisible = boundaryRect?.visible;
+            if (boundaryRect) {
+                boundaryRect.set('visible', false);
+            }
+
             canvas.renderAll();
 
             // 5. Export
-            return canvas.toDataURL({
+            const result = canvas.toDataURL({
                 format: options.format as any,
                 quality: options.quality,
                 multiplier: 1,
                 enableRetinaScaling: false,
             });
+
+            // Restore boundary visibility
+            if (boundaryRect && boundaryWasVisible) {
+                boundaryRect.set('visible', true);
+            }
+
+            return result;
         } finally {
             // Restore state
             canvas.setDimensions({ width: currentW, height: currentH });
@@ -2841,7 +3009,27 @@
         // Standard toJSON includes HISTORY_PROPS for top-level objects.
         // We also want to ensure custom metadata on backgroundImage is included.
         const json = (canvas as any).toJSON(HISTORY_PROPS);
-        if (canvas.backgroundImage && json.backgroundImage) {
+
+        console.log(
+            'CanvasEditor: toJSON called, objects count:',
+            canvas.getObjects().length,
+            'canvas size:',
+            canvas.getWidth(),
+            'x',
+            canvas.getHeight(),
+            'isCanvasMode:',
+            isCanvasMode
+        );
+
+        // For canvas mode, add canvas dimensions and remove backgroundImage to avoid blob URL issues
+        if (isCanvasMode) {
+            json.width = canvas.getWidth();
+            json.height = canvas.getHeight();
+            if (json.backgroundImage) {
+                console.log('CanvasEditor: Removing backgroundImage for canvas mode');
+                delete json.backgroundImage;
+            }
+        } else if (canvas.backgroundImage && json.backgroundImage) {
             const bg = canvas.backgroundImage as any;
             const actual = getActualImage(bg);
             json.backgroundImage._originalSrc = actual?._originalSrc || bg._originalSrc;
@@ -2861,7 +3049,57 @@
         isHistoryProcessing = true;
 
         try {
+            console.log('CanvasEditor: fromJSON called', json);
+
             await canvas.loadFromJSON(json);
+
+            // Restore canvas dimensions if they were saved (loadFromJSON should handle this, but ensure it)
+            if (json.width && json.height) {
+                console.log(
+                    'CanvasEditor: Restoring canvas dimensions:',
+                    json.width,
+                    'x',
+                    json.height
+                );
+                canvas.setDimensions({ width: json.width, height: json.height });
+            } else {
+                console.log(
+                    'CanvasEditor: No dimensions in JSON, current size:',
+                    canvas.getWidth(),
+                    'x',
+                    canvas.getHeight()
+                );
+            }
+
+            // For canvas mode, add boundary rectangle
+            if (isCanvasMode) {
+                const w = canvas.getWidth();
+                const h = canvas.getHeight();
+
+                // Remove any existing boundary
+                const existingBoundary = canvas.getObjects().find((o: any) => o._isCanvasBoundary);
+                if (existingBoundary) {
+                    canvas.remove(existingBoundary);
+                }
+
+                // Add new boundary rectangle
+                const boundaryRect = new Rect({
+                    left: 0,
+                    top: 0,
+                    width: w,
+                    height: h,
+                    fill: 'transparent',
+                    stroke: '#e0e0e0',
+                    strokeWidth: 2,
+                    strokeDashArray: [10, 5],
+                    selectable: false,
+                    evented: false,
+                    excludeFromExport: true,
+                });
+                (boundaryRect as any)._isCanvasBoundary = true;
+                canvas.add(boundaryRect);
+                canvas.sendObjectToBack(boundaryRect);
+            }
 
             // Manually restore metadata to the background image
             if (canvas.backgroundImage && json.backgroundImage) {
@@ -2883,6 +3121,11 @@
             restoreObjectSelectionStates();
 
             canvas!.renderAll();
+
+            console.log(
+                'CanvasEditor: fromJSON completed, objects count:',
+                canvas.getObjects().length
+            );
 
             // Automatically fit to viewport after loading JSON
             setTimeout(() => {
@@ -3016,6 +3259,130 @@
             console.warn('rotate failed', e);
         }
     }
+
+    // Resize canvas (for canvas mode)
+    export function resizeCanvas(width: number, height: number) {
+        if (!canvas || !isCanvasMode) return;
+
+        try {
+            // Update canvas dimensions
+            canvas.setDimensions({ width, height });
+
+            // Update boundary rectangle
+            const boundaryRect = canvas.getObjects().find((o: any) => o._isCanvasBoundary);
+            if (boundaryRect) {
+                boundaryRect.set({ width, height });
+                boundaryRect.setCoords();
+            }
+
+            // Fit to viewport
+            fitImageToViewport();
+            canvas.requestRenderAll();
+            schedulePushWithType('modified');
+        } catch (e) {
+            console.error('CanvasEditor: resizeCanvas failed:', e);
+        }
+    }
+
+    // Help to add a fabric image from a URL/File
+    function addFabricImageFromURL(url: string) {
+        if (!canvas) return;
+        const imgEl = new Image();
+        imgEl.onload = () => {
+            const fImg = new FabricImage(imgEl, {
+                left: 100,
+                top: 100,
+                selectable: true,
+                evented: true,
+            });
+            // Scale down if too large
+            const maxW = canvas!.width! * 0.8;
+            const maxH = canvas!.height! * 0.8;
+            if (fImg.width! > maxW || fImg.height! > maxH) {
+                const scale = Math.min(maxW / fImg.width!, maxH / fImg.height!);
+                fImg.scale(scale);
+            }
+
+            canvas!.add(fImg);
+            canvas!.setActiveObject(fImg);
+            canvas!.requestRenderAll();
+            schedulePushWithType('added');
+        };
+        imgEl.src = url;
+    }
+
+    // Global paste handler for images and objects
+    async function onWindowPaste(e: ClipboardEvent) {
+        if (!canvas) return;
+
+        // Stop propagation to prevent Siyuan from receiving the paste event
+        e.stopPropagation();
+        e.preventDefault();
+
+        // Check if we are in an input or textarea
+        const el = e.target as HTMLElement | null;
+        if (
+            el &&
+            (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || (el as any).isContentEditable)
+        ) {
+            return;
+        }
+
+        const items = e.clipboardData?.items;
+        if (!items) {
+            // If no system clipboard items (or just text/objects), try our internal clipboard
+            pasteClipboard();
+            return;
+        }
+
+        let hasImage = false;
+        for (let i = 0; i < items.length; i++) {
+            if (items[i].type.indexOf('image') !== -1) {
+                const blob = items[i].getAsFile();
+                if (!blob) continue;
+                const url = URL.createObjectURL(blob);
+                addFabricImageFromURL(url);
+                // We don't revoke immediately because image.onload is async
+                // URL.revokeObjectURL(url); // Should be called inside onload if we really care, but blobs are fine for a bit
+                hasImage = true;
+            }
+        }
+
+        if (!hasImage) {
+            // If no images found in system clipboard, try internal fabric clipboard
+            pasteClipboard();
+        }
+    }
+
+    // API to upload image
+    export function uploadImage() {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.onchange = (e: any) => {
+            const file = e.target.files?.[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = f => {
+                    const data = f.target?.result as string;
+                    addFabricImageFromURL(data);
+                };
+                reader.readAsDataURL(file);
+            }
+        };
+        input.click();
+    }
+
+    onMount(() => {
+        window.addEventListener('paste', onWindowPaste);
+    });
+
+    onDestroy(() => {
+        window.removeEventListener('paste', onWindowPaste);
+        if (onDocKeyDown) document.removeEventListener('keydown', onDocKeyDown as any);
+        if (onDocKeyUp) document.removeEventListener('keyup', onDocKeyUp as any);
+        if (onDocKeyShortcuts) document.removeEventListener('keydown', onDocKeyShortcuts);
+    });
 </script>
 
 <div class="canvas-editor">

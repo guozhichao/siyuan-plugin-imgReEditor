@@ -23,6 +23,7 @@
     },
     "imageEditor": {
         "editImage": "Edit image",
+        "createCanvas": "Create canvas (ImgReEditor)",
         "saveSuccess": "Image saved",
         "saveFailed": "Save failed"
     }

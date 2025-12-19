@@ -6,6 +6,7 @@
     export let redoCount: number = 0;
     export let active: string | null = null;
     export let activeShape: string | null = null;
+    export let isCanvasMode: boolean = false;
     const dispatch = createEventDispatcher();
 
     function emit(name: string, detail: any = {}) {
@@ -169,6 +170,21 @@
             <rect x="7" y="7" width="10" height="10" rx="1" ry="1" />
         </svg>
     </button>
+    {#if isCanvasMode}
+        <button
+            class="b3-button"
+            class:active={active === 'canvas'}
+            class:b3-button--outline={active !== 'canvas'}
+            on:click={() => emit('tool', { tool: 'canvas' })}
+            title="画布设置"
+        >
+            <svg class="icon" viewBox="0 0 24 24">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" stroke-dasharray="4" />
+                <path d="M21 3L15 3" />
+                <path d="M3 21L3 15" />
+            </svg>
+        </button>
+    {/if}
     <button
         class="b3-button"
         class:active={active === 'transform'}
@@ -183,13 +199,23 @@
             />
         </svg>
     </button>
-    <button class="b3-button b3-button--outline" on:click={() => emit('undo')} disabled={!canUndo} title="撤销">
+    <button
+        class="b3-button b3-button--outline"
+        on:click={() => emit('undo')}
+        disabled={!canUndo}
+        title="撤销"
+    >
         <svg class="icon" viewBox="0 0 24 24">
             <path d="M3 7v6h6" />
             <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" />
         </svg>
     </button>
-    <button class="b3-button b3-button--outline" on:click={() => emit('redo')} disabled={!canRedo} title="重做">
+    <button
+        class="b3-button b3-button--outline"
+        on:click={() => emit('redo')}
+        disabled={!canRedo}
+        title="重做"
+    >
         <svg class="icon" viewBox="0 0 24 24">
             <path d="M21 7v6h-6" />
             <path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13" />

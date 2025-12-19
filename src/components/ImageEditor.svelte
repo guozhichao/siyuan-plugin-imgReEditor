@@ -12,7 +12,8 @@
     export let imagePath: string;
     export let blockId: string | null = null;
     export let settings: any;
-    export let onClose: (saved: boolean) => void;
+    export let isCanvasMode: boolean = false;
+    export let onClose: (saved: boolean, newPath?: string) => void;
 
     let imageBlob: Blob | null = null;
     let editorReady = false;
@@ -77,6 +78,31 @@
         dispatch('saveSettings', settings);
     }
 
+    // Reactive statement to restore canvasJSON when savedEditorData becomes available
+    $: if (
+        editorReady &&
+        isCanvasMode &&
+        savedEditorData &&
+        savedEditorData.canvasJSON &&
+        canvasEditorRef
+    ) {
+        console.log('ImageEditor: Reactive restoration of canvasJSON', savedEditorData.canvasJSON);
+        try {
+            canvasEditorRef.fromJSON(savedEditorData.canvasJSON);
+            if (savedEditorData.cropData) {
+                cropData = savedEditorData.cropData;
+                isCropped = true;
+            }
+            if (savedEditorData.originalImageDimensions) {
+                originalImageDimensions = savedEditorData.originalImageDimensions;
+            }
+            // Clear savedEditorData to prevent re-triggering
+            savedEditorData = null;
+        } catch (e) {
+            console.warn('Failed to restore canvas JSON reactively', e);
+        }
+    }
+
     async function blobToDataURL(blob: Blob): Promise<string> {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
@@ -92,7 +118,13 @@
 
     async function loadImage() {
         try {
-            if (!imagePath) return;
+            if (!imagePath) {
+                if (isCanvasMode) {
+                    editorReady = true;
+                    return;
+                }
+                return;
+            }
             // Prepare path for getFileBlob or direct fetch: 'assets/xxx' -> backend 'data/assets/xxx'
             let blob: Blob | null = null;
             if (
@@ -112,6 +144,11 @@
                 blob = await getFileBlob(getFilePath);
             }
             if (!blob || blob.size === 0) {
+                if (isCanvasMode) {
+                    // If canvas mode, maybe we just didn't have an imagePath yet
+                    editorReady = true;
+                    return;
+                }
                 pushErrMsg('无法获取图片文件或文件为空');
                 return;
             }
@@ -168,10 +205,20 @@
             } else {
                 // Store editorData for restoration after canvas is ready
                 savedEditorData = editorData;
+
+                console.log('ImageEditor: Loaded metadata', editorData);
+
+                // If metadata contains isCanvasMode flag, update the component's mode
+                if (editorData && editorData.isCanvasMode === true) {
+                    isCanvasMode = true;
+                    console.log('ImageEditor: Detected canvas mode from metadata');
+                }
             }
 
             // Destroy prior TUI instance (no-op for Fabric-only flow)
 
+            // For canvas mode with saved content, we need to load the image as background
+            // and then restore the canvas JSON on top of it
             // Convert blob to data URL for loading (always use current image blob)
             const dataURL = await blobToDataURL(blob);
             lastBlobURL = dataURL;
@@ -197,7 +244,7 @@
     }
 
     async function handleSave() {
-        if (!imageBlob) return;
+        if (!isCanvasMode && !imageBlob) return;
         if (!editorReady) {
             pushErrMsg('编辑器尚未准备好，请稍后重试');
             return;
@@ -237,6 +284,19 @@
 
             // Determine backup names and write metadata into PNG
             // Use original filename without -original suffix
+            let saveName = '';
+            if (!imagePath && isCanvasMode) {
+                // generate a new name for the canvas
+                const now = new Date();
+                const timestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
+                saveName = `canvas-${timestamp}.png`;
+                originalFileName = saveName;
+            } else {
+                saveName = needConvertToPNG
+                    ? originalFileName.replace(/\.[^.]+$/, '.png')
+                    : originalFileName;
+            }
+
             const origBackupName = originalFileName;
             const origBackupPath = `${STORAGE_BACKUP_DIR}/${origBackupName}`;
 
@@ -244,6 +304,7 @@
             const buffer = new Uint8Array(await blob.arrayBuffer());
             const metaObj: any = {
                 version: 1,
+                isCanvasMode,
                 originalFileName,
                 cropData: isCropped ? cropData : null,
                 originalImageDimensions:
@@ -253,20 +314,24 @@
                           ? originalImageDimensions
                           : null,
             };
+
+            console.log('ImageEditor: canvasJSON from CanvasEditor:', canvasJSON);
+            console.log('ImageEditor: storageMode:', settings.storageMode);
+
             // Do not embed canvasJSON into PNG metadata when using backup mode
             if (settings.storageMode !== 'backup') {
                 metaObj.canvasJSON = canvasJSON;
+                console.log('ImageEditor: Added canvasJSON to metadata');
             }
             const metaValue = JSON.stringify(metaObj);
+            console.log('ImageEditor: Final metadata:', metaValue.substring(0, 200));
             const newBuffer = insertPNGTextChunk(buffer, 'siyuan-plugin-imgReEditor', metaValue);
             // Convert Uint8Array to ArrayBuffer for Blob constructor
             const newBlob = new Blob([newBuffer as any], { type: 'image/png' });
 
             // Save to Siyuan using same path - replace
             // If original ext was jpg/jpeg, we still use PNG and update name suffix
-            const saveName = needConvertToPNG
-                ? originalFileName.replace(/\.[^.]+$/, '.png')
-                : originalFileName;
+            // saveName already determined above
             // prepare original backup names already determined above
 
             // (Backup mode no longer stores the original image file.)
@@ -321,7 +386,7 @@
             // Close the editor after successful save
             // If user wants to continue editing, they can reopen the editor
             // which will properly load the saved image with all metadata
-            onClose?.(true);
+            onClose?.(true, `assets/${saveName}`);
         } catch (e) {
             console.error(e);
             pushErrMsg('保存失败');
@@ -446,6 +511,7 @@
     <Toolbar
         active={activeTool}
         {activeShape}
+        {isCanvasMode}
         canUndo={undoAvailable}
         canRedo={redoAvailable}
         {undoCount}
@@ -465,6 +531,7 @@
                 'number-marker',
                 'crop',
                 'image-border',
+                'canvas',
             ].includes(t);
             showToolPopup = hasSubmenu;
             // Only update popup position on first open (before user drags it)
@@ -511,6 +578,26 @@
                     // open transform submenu
                     canvasEditorRef.setTool('transform');
                     toolSettings = canvasEditorRef.getToolOptions();
+                } else if (t === 'canvas') {
+                    canvasEditorRef.setTool(null);
+                    activeTool = 'canvas';
+                    const cw = canvasEditorRef.getCanvas
+                        ? canvasEditorRef.getCanvas().getWidth()
+                        : 800;
+                    const ch = canvasEditorRef.getCanvas
+                        ? canvasEditorRef.getCanvas().getHeight()
+                        : 600;
+                    toolSettings = { width: cw, height: ch };
+                } else if (t === 'canvas') {
+                    canvasEditorRef.setTool(null);
+                    activeTool = 'canvas';
+                    const cw = canvasEditorRef.getCanvas
+                        ? canvasEditorRef.getCanvas().getWidth()
+                        : 800;
+                    const ch = canvasEditorRef.getCanvas
+                        ? canvasEditorRef.getCanvas().getHeight()
+                        : 600;
+                    toolSettings = { width: Math.round(cw), height: Math.round(ch) };
                 } else {
                     // Get last used settings for this tool
                     const savedOptions =
@@ -566,11 +653,42 @@
         <div class="canvas-wrap">
             <CanvasEditor
                 bind:this={canvasEditorRef}
-                dataURL={lastBlobURL}
+                dataURL={isCanvasMode && savedEditorData && savedEditorData.canvasJSON
+                    ? ''
+                    : lastBlobURL}
                 blobURL={tmpBlobUrl}
                 fileName={originalFileName}
+                {isCanvasMode}
                 on:ready={() => {
                     editorReady = true;
+
+                    console.log('ImageEditor: on:ready fired, savedEditorData:', savedEditorData);
+
+                    // For canvas mode with saved JSON, restore it now
+                    if (
+                        isCanvasMode &&
+                        savedEditorData &&
+                        savedEditorData.canvasJSON &&
+                        canvasEditorRef
+                    ) {
+                        try {
+                            console.log(
+                                'ImageEditor: Restoring canvasJSON in on:ready',
+                                savedEditorData.canvasJSON
+                            );
+                            canvasEditorRef.fromJSON(savedEditorData.canvasJSON);
+                            if (savedEditorData.cropData) {
+                                cropData = savedEditorData.cropData;
+                                isCropped = true;
+                            }
+                            if (savedEditorData.originalImageDimensions) {
+                                originalImageDimensions = savedEditorData.originalImageDimensions;
+                            }
+                        } catch (e) {
+                            console.warn('Failed to restore canvas JSON in on:ready', e);
+                        }
+                    }
+
                     // If user requested crop before canvas was ready, try now
                     try {
                         if (
@@ -596,6 +714,12 @@
 
                     if (savedEditorData && savedEditorData.canvasJSON && canvasEditorRef) {
                         try {
+                            console.log(
+                                'ImageEditor: Restoring canvasJSON',
+                                savedEditorData.canvasJSON
+                            );
+                            // For canvas mode with saved JSON, restore from JSON instead of using background
+                            // This prevents showing the exported image as background
                             canvasEditorRef.fromJSON(savedEditorData.canvasJSON);
                             if (savedEditorData.cropData) {
                                 cropData = savedEditorData.cropData;
@@ -608,6 +732,9 @@
                             console.warn('Failed to restore canvas JSON to CanvasEditor', e);
                         }
                     } else {
+                        console.log(
+                            'ImageEditor: No savedEditorData or canvasJSON, fitting to viewport'
+                        );
                         // For new images without saved data, fit to viewport now
                         if (
                             canvasEditorRef &&
@@ -863,6 +990,40 @@
                         tool={activeTool}
                         settings={toolSettings}
                         recentColors={settings.recentColors || {}}
+                        on:action={e => {
+                            const { action } = e.detail;
+                            try {
+                                if (action === 'setCropRatio') {
+                                    canvasEditorRef.setCropRatio &&
+                                        canvasEditorRef.setCropRatio(e.detail.label || 'none');
+                                    toolSettings = {
+                                        ...toolSettings,
+                                        cropRatioLabel: e.detail.label,
+                                    };
+                                } else if (action === 'applyCrop') {
+                                    canvasEditorRef.applyPendingCrop &&
+                                        canvasEditorRef.applyPendingCrop();
+                                } else if (action === 'flip') {
+                                    const dir = e.detail.dir;
+                                    if (dir === 'horizontal') canvasEditorRef.flipHorizontal();
+                                    else if (dir === 'vertical') canvasEditorRef.flipVertical();
+                                } else if (action === 'rotate') {
+                                    const dir = e.detail.dir;
+                                    if (dir === 'cw') canvasEditorRef.rotate90(true);
+                                    else if (dir === 'ccw') canvasEditorRef.rotate90(false);
+                                } else if (action === 'resizeCanvas') {
+                                    canvasEditorRef.resizeCanvas &&
+                                        canvasEditorRef.resizeCanvas(
+                                            e.detail.width,
+                                            e.detail.height
+                                        );
+                                } else if (action === 'uploadImage') {
+                                    canvasEditorRef.uploadImage && canvasEditorRef.uploadImage();
+                                }
+                            } catch (err) {
+                                console.warn('Action failed', err);
+                            }
+                        }}
                         on:change={e => {
                             toolSettings = e.detail;
                             if (toolSettings && toolSettings.shape)

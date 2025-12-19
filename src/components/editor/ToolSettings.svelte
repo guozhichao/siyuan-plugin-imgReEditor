@@ -527,6 +527,44 @@
             />
             <span class="val">{settings.blockSize || 15}</span>
         </div>
+    {:else if tool === 'canvas'}
+        <div class="row">
+            <label for="canvas-width">画布宽度</label>
+            <input
+                id="canvas-width"
+                type="number"
+                min="100"
+                max="5000"
+                value={settings.width || 800}
+                on:input={e => emitChange({ width: +getValue(e) })}
+                style="width: 80px;"
+            />
+        </div>
+        <div class="row">
+            <label for="canvas-height">画布高度</label>
+            <input
+                id="canvas-height"
+                type="number"
+                min="100"
+                max="5000"
+                value={settings.height || 600}
+                on:input={e => emitChange({ height: +getValue(e) })}
+                style="width: 80px;"
+            />
+        </div>
+        <div class="row" style="gap: 8px;">
+            <button
+                on:click={() =>
+                    dispatch('action', {
+                        action: 'resizeCanvas',
+                        width: settings.width || 800,
+                        height: settings.height || 600,
+                    })}
+            >
+                调整大小
+            </button>
+            <button on:click={() => dispatch('action', { action: 'uploadImage' })}>上传图片</button>
+        </div>
     {:else if tool === 'transform'}
         <div class="row">
             <div class="label">翻转</div>
