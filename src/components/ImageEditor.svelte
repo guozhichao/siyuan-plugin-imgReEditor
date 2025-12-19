@@ -305,6 +305,7 @@
             try {
                 // Update img elements where dataset.src equal to current imagePath
                 const newDataset = `assets/${saveName}`;
+                await fetch(newDataset, { cache: 'reload' });
                 document
                     .querySelectorAll(`img[data-src="${imagePath}"]`)
                     .forEach((imageElement: any) => {
@@ -312,7 +313,7 @@
                         imageElement.src = newDataset;
                     });
                 // update local imagePath so subsequent saves reuse updated path
-                imagePath = `assets/${saveName}`;
+                imagePath = newDataset;
             } catch (e) {
                 console.warn('DOM update failed', e);
             }
