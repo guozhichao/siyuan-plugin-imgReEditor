@@ -1,7 +1,9 @@
 <script lang="ts">
     import { createEventDispatcher, onMount } from 'svelte';
+    import ColorPicker from './ColorPicker.svelte';
     export let tool: string | null = null;
     export let settings: any = {};
+    export let recentColors: Record<string, string[]> = {};
     const dispatch = createEventDispatcher();
 
     function emitChange(partial: any) {
@@ -75,11 +77,12 @@
     {:else if tool === 'shape'}
         <div class="row">
             <label for="stroke-color">描边颜色</label>
-            <input
-                id="stroke-color"
-                type="color"
+            <ColorPicker
+                colorKey={`shape-${settings.shape || 'rect'}-stroke`}
                 value={settings.stroke || '#ff0000'}
-                on:input={e => emitChange({ stroke: getValue(e) })}
+                {recentColors}
+                on:change={e => emitChange({ stroke: e.detail })}
+                on:recentUpdate
             />
         </div>
         <div class="row">
@@ -104,11 +107,12 @@
                     emitChange({ fill: getChecked(e) ? settings.fill || '#ffffff' : null })}
             />
             {#if settings.fill}
-                <input
-                    id="fill-color"
-                    type="color"
+                <ColorPicker
+                    colorKey={`shape-${settings.shape || 'rect'}-fill`}
                     value={settings.fill}
-                    on:input={e => emitChange({ fill: getValue(e) })}
+                    {recentColors}
+                    on:change={e => emitChange({ fill: e.detail })}
+                    on:recentUpdate
                 />
                 <div style="">
                     <label for="fill-opacity" style="width:90px;">填充透明度</label>
@@ -127,11 +131,12 @@
     {:else if tool === 'brush'}
         <div class="row">
             <label for="brush-color">颜色</label>
-            <input
-                id="brush-color"
-                type="color"
+            <ColorPicker
+                colorKey="brush-color"
                 value={settings.stroke || '#ff0000'}
-                on:input={e => emitChange({ stroke: getValue(e) })}
+                {recentColors}
+                on:change={e => emitChange({ stroke: e.detail })}
+                on:recentUpdate
             />
         </div>
         <div class="row">
@@ -162,11 +167,12 @@
     {:else if tool === 'arrow'}
         <div class="row">
             <label for="arrow-color">颜色</label>
-            <input
-                id="arrow-color"
-                type="color"
+            <ColorPicker
+                colorKey="arrow-color"
                 value={settings.stroke || '#ff0000'}
-                on:input={e => emitChange({ stroke: getValue(e) })}
+                {recentColors}
+                on:change={e => emitChange({ stroke: e.detail })}
+                on:recentUpdate
             />
         </div>
         <div class="row">
@@ -248,20 +254,22 @@
         </div>
         <div class="row">
             <label for="font-color">颜色</label>
-            <input
-                id="font-color"
-                type="color"
+            <ColorPicker
+                colorKey="text-fill"
                 value={settings.fill || '#000000'}
-                on:input={e => emitChange({ fill: getValue(e) })}
+                {recentColors}
+                on:change={e => emitChange({ fill: e.detail })}
+                on:recentUpdate
             />
         </div>
         <div class="row">
             <label for="font-stroke">描边颜色</label>
-            <input
-                id="font-stroke"
-                type="color"
+            <ColorPicker
+                colorKey="text-stroke"
                 value={settings.stroke || '#ffffff'}
-                on:input={e => emitChange({ stroke: getValue(e) })}
+                {recentColors}
+                on:change={e => emitChange({ stroke: e.detail })}
+                on:recentUpdate
             />
         </div>
         <div class="row">
@@ -280,11 +288,12 @@
     {:else if tool === 'number-marker'}
         <div class="row">
             <label for="num-bg-color">背景颜色</label>
-            <input
-                id="num-bg-color"
-                type="color"
+            <ColorPicker
+                colorKey="number-marker-fill"
                 value={settings.fill || '#ff0000'}
-                on:input={e => emitChange({ fill: getValue(e) })}
+                {recentColors}
+                on:change={e => emitChange({ fill: e.detail })}
+                on:recentUpdate
             />
         </div>
         <div class="row">

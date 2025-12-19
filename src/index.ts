@@ -121,6 +121,10 @@ export default class PluginSample extends Plugin {
         });
         const target = dialog.element.querySelector('#ImageEditor') as HTMLElement;
         const comp = new ImageEditorComponent({ target, props: { imagePath, blockId: blockID, settings: this.settings, onClose: (_saved: boolean) => { dialog.destroy(); comp.$destroy(); } } });
+        comp.$on('saveSettings', (e) => {
+            this.settings = e.detail;
+            this.saveSettings(this.settings);
+        });
     }
     /**
      * 加载设置

@@ -1,5 +1,6 @@
 <script lang="ts">
-    import { onMount, onDestroy } from 'svelte';
+    import { onMount, onDestroy, createEventDispatcher } from 'svelte';
+    const dispatch = createEventDispatcher();
     import CanvasEditor from './editor/CanvasEditor.svelte';
     import Toolbar from './editor/Toolbar.svelte';
     import ToolSettings from './editor/ToolSettings.svelte';
@@ -53,6 +54,28 @@
     let originalImageDimensions = { width: 0, height: 0 };
     let cropData: { left: number; top: number; width: number; height: number } | null = null;
     let isCropped = false;
+
+    function saveToolSettings(tool: string | null, options: any) {
+        if (!tool || !options) return;
+        if (!settings) settings = {};
+        if (!settings.lastToolSettings) settings.lastToolSettings = {};
+
+        // Determine the persistence key
+        let key = tool;
+        if (tool === 'shape') {
+            const shapeType = options.shape || activeShape || 'rect';
+            key = `shape-${shapeType}`;
+        }
+
+        // Avoid saving certain transient or UI-only properties if they exist
+        const toSave = { ...options };
+        if (tool === 'number-marker') {
+            delete toSave.isSelection;
+        }
+
+        settings.lastToolSettings[key] = toSave;
+        dispatch('saveSettings', settings);
+    }
 
     async function blobToDataURL(blob: Blob): Promise<string> {
         return new Promise((resolve, reject) => {
@@ -448,10 +471,14 @@
             }
             if (canvasEditorRef && typeof canvasEditorRef.setTool === 'function') {
                 if (t === 'shape') {
-                    const shapeType =
-                        e.detail.shape || (toolSettings && toolSettings.shape) || 'rect';
+                    const shapeType = e.detail.shape || 'rect';
                     activeShape = shapeType;
-                    canvasEditorRef.setTool('shape', { shape: shapeType });
+                    const key = `shape-${shapeType}`;
+                    // Get last used settings for THIS specific shape type
+                    const savedOptions =
+                        (settings.lastToolSettings && settings.lastToolSettings[key]) || {};
+                    const options = { ...savedOptions, shape: shapeType };
+                    canvasEditorRef.setTool('shape', options);
                     toolSettings = canvasEditorRef.getToolOptions();
                 } else if (t === 'crop') {
                     // Delegate crop mode to CanvasEditor
@@ -482,7 +509,10 @@
                     canvasEditorRef.setTool('transform');
                     toolSettings = canvasEditorRef.getToolOptions();
                 } else {
-                    canvasEditorRef.setTool(t);
+                    // Get last used settings for this tool
+                    const savedOptions =
+                        (settings.lastToolSettings && settings.lastToolSettings[t]) || {};
+                    canvasEditorRef.setTool(t, savedOptions);
                     toolSettings = canvasEditorRef.getToolOptions();
                 }
             }
@@ -639,8 +669,15 @@
                                         canvasEditorRef &&
                                         typeof canvasEditorRef.setTool === 'function'
                                     )
-                                        canvasEditorRef.setTool('shape', { shape: activeShape });
+                                        canvasEditorRef.setTool('shape', {
+                                            shape: activeShape,
+                                            ...e.detail.options,
+                                        });
                                 } catch (err) {}
+                                saveToolSettings('shape', {
+                                    ...e.detail.options,
+                                    shape: activeShape,
+                                });
                             } else if (type === 'i-text' || type === 'textbox' || type === 'text') {
                                 // auto-open text settings when a text object is selected
                                 activeTool = 'text';
@@ -653,6 +690,7 @@
                                     )
                                         canvasEditorRef.setTool('text', toolSettings);
                                 } catch (err) {}
+                                saveToolSettings('text', toolSettings);
                             } else if (type === 'arrow') {
                                 // auto-open arrow settings when an arrow is selected
                                 activeTool = 'arrow';
@@ -665,12 +703,14 @@
                                     )
                                         canvasEditorRef.setTool('arrow', toolSettings);
                                 } catch (err) {}
+                                saveToolSettings('arrow', toolSettings);
                             } else if (type === 'number-marker') {
                                 // auto-open number settings when a number marker is selected
                                 activeTool = 'number-marker';
                                 showToolPopup = true;
                                 toolSettings = e.detail.options || {};
                                 // keep it as number-marker to show specific edit UI
+                                saveToolSettings('number-marker', toolSettings);
                             } else {
                                 /* don't auto-open for other types */
                             }
@@ -711,21 +751,29 @@
                 <!-- svelte-ignore a11y-no-static-element-interactions -->
                 <div class="tool-popup-header" on:mousedown={onPopupDragStart}>
                     <div class="title">
-                        {activeTool === 'shape'
-                            ? activeShape === 'rect'
+                        {#if activeTool === 'shape'}
+                            {activeShape === 'rect'
                                 ? '矩形设置'
                                 : activeShape === 'circle' || activeShape === 'ellipse'
                                   ? '椭圆设置'
-                                  : '形状设置'
-                            : activeTool === 'arrow'
-                              ? '箭头设置'
-                              : activeTool === 'brush'
-                                ? '画笔设置'
-                                : activeTool === 'eraser'
-                                  ? '橡皮设置'
-                                  : activeTool === 'number-marker'
-                                    ? '序号设置'
-                                    : activeTool}
+                                  : '形状设置'}
+                        {:else if activeTool === 'arrow'}
+                            箭头设置
+                        {:else if activeTool === 'brush'}
+                            画笔设置
+                        {:else if activeTool === 'eraser'}
+                            橡皮设置
+                        {:else if activeTool === 'number-marker'}
+                            序号设置
+                        {:else if activeTool === 'text'}
+                            文本设置
+                        {:else if activeTool === 'transform'}
+                            变换设置
+                        {:else if activeTool === 'crop'}
+                            裁剪设置
+                        {:else}
+                            {activeTool}
+                        {/if}
                     </div>
                     <button
                         class="close"
@@ -740,6 +788,7 @@
                     <ToolSettings
                         tool={activeTool}
                         settings={toolSettings}
+                        recentColors={settings.recentColors || {}}
                         on:change={e => {
                             toolSettings = e.detail;
                             if (toolSettings && toolSettings.shape)
@@ -748,6 +797,17 @@
                                 canvasEditorRef.setTool(activeTool, toolSettings);
                                 canvasEditorRef.applyToolOptionsToSelection(toolSettings);
                             } catch (err) {}
+                            // Persist settings for the active tool
+                            saveToolSettings(activeTool, toolSettings);
+                        }}
+                        on:recentUpdate={e => {
+                            const { colorKey, colors } = e.detail;
+                            if (!settings.recentColors) settings.recentColors = {};
+                            settings.recentColors[colorKey] = colors;
+                            // Notify parent to save settings if needed,
+                            // though in Siyuan we usually save when settings change or on close.
+                            // We can dispatch an event that index.ts listens to.
+                            dispatch('saveSettings', settings);
                         }}
                         on:action={e => {
                             try {
