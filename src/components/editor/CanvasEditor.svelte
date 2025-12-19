@@ -1542,7 +1542,6 @@
         activeTool = tool;
         activeToolOptions = options || {};
 
-
         if (tool === 'number-marker') {
             if (typeof options.nextNumber !== 'undefined') {
                 currentNumber = options.nextNumber;
@@ -3045,30 +3044,73 @@
         }
     }
 
-    export function toJSON() {
+    export async function toJSON() {
         if (!canvas) return null;
         // Standard toJSON includes HISTORY_PROPS for top-level objects.
         // We also want to ensure custom metadata on backgroundImage is included.
         const json = (canvas as any).toJSON(HISTORY_PROPS);
 
-        console.log(
-            'CanvasEditor: toJSON called, objects count:',
-            canvas.getObjects().length,
-            'canvas size:',
-            canvas.getWidth(),
-            'x',
-            canvas.getHeight(),
-            'isCanvasMode:',
-            isCanvasMode
-        );
+
 
         // For canvas mode, add canvas dimensions and remove backgroundImage to avoid blob URL issues
         if (isCanvasMode) {
             json.width = canvas.getWidth();
             json.height = canvas.getHeight();
             if (json.backgroundImage) {
-                console.log('CanvasEditor: Removing backgroundImage for canvas mode');
                 delete json.backgroundImage;
+            }
+
+            // Convert blob URLs to base64 data URLs for permanent storage
+            if (json.objects) {
+                const conversionPromises: Promise<void>[] = [];
+
+                json.objects.forEach((obj: any, index: number) => {
+                    // Fabric.js uses 'Image' (capital I) for image objects
+                    if (
+                        obj.type &&
+                        obj.type.toLowerCase() === 'image' &&
+                        obj.src &&
+                        obj.src.startsWith('blob:')
+                    ) {
+
+                        // Create a promise to convert blob URL to data URL
+                        const conversionPromise = new Promise<void>(resolve => {
+                            const img = new Image();
+                            img.crossOrigin = 'anonymous';
+                            img.onload = () => {
+                                try {
+                                    const tempCanvas = document.createElement('canvas');
+                                    tempCanvas.width = img.naturalWidth || img.width;
+                                    tempCanvas.height = img.naturalHeight || img.height;
+                                    const ctx = tempCanvas.getContext('2d');
+                                    if (ctx) {
+                                        ctx.drawImage(img, 0, 0);
+                                        const dataURL = tempCanvas.toDataURL('image/png');
+                                        obj.src = dataURL;
+                                    }
+                                } catch (e) {
+                                    console.error(`Failed to convert image ${index} to base64:`, e);
+                                }
+                                resolve();
+                            };
+                            img.onerror = () => {
+                                console.error(
+                                    `Failed to load image ${index} from blob URL:`,
+                                    obj.src
+                                );
+                                resolve();
+                            };
+                            img.src = obj.src;
+                        });
+
+                        conversionPromises.push(conversionPromise);
+                    }
+                });
+
+                // Wait for all conversions to complete
+                if (conversionPromises.length > 0) {
+                    await Promise.all(conversionPromises);
+                }
             }
         } else if (canvas.backgroundImage && json.backgroundImage) {
             const bg = canvas.backgroundImage as any;
@@ -3090,26 +3132,13 @@
         isHistoryProcessing = true;
 
         try {
-            console.log('CanvasEditor: fromJSON called', json);
 
             await canvas.loadFromJSON(json);
 
             // Restore canvas dimensions if they were saved (loadFromJSON should handle this, but ensure it)
             if (json.width && json.height) {
-                console.log(
-                    'CanvasEditor: Restoring canvas dimensions:',
-                    json.width,
-                    'x',
-                    json.height
-                );
                 canvas.setDimensions({ width: json.width, height: json.height });
             } else {
-                console.log(
-                    'CanvasEditor: No dimensions in JSON, current size:',
-                    canvas.getWidth(),
-                    'x',
-                    canvas.getHeight()
-                );
             }
 
             // For canvas mode, add boundary rectangle
@@ -3164,10 +3193,6 @@
 
             canvas!.renderAll();
 
-            console.log(
-                'CanvasEditor: fromJSON completed, objects count:',
-                canvas.getObjects().length
-            );
 
             // Automatically fit to viewport after loading JSON
             setTimeout(() => {

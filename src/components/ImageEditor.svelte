@@ -86,7 +86,6 @@
         savedEditorData.canvasJSON &&
         canvasEditorRef
     ) {
-        console.log('ImageEditor: Reactive restoration of canvasJSON', savedEditorData.canvasJSON);
         try {
             canvasEditorRef.fromJSON(savedEditorData.canvasJSON);
             if (savedEditorData.cropData) {
@@ -206,12 +205,10 @@
                 // Store editorData for restoration after canvas is ready
                 savedEditorData = editorData;
 
-                console.log('ImageEditor: Loaded metadata', editorData);
 
                 // If metadata contains isCanvasMode flag, update the component's mode
                 if (editorData && editorData.isCanvasMode === true) {
                     isCanvasMode = true;
-                    console.log('ImageEditor: Detected canvas mode from metadata');
                 }
             }
 
@@ -265,7 +262,7 @@
                 console.warn('Failed to apply pending crop before save', e);
             }
 
-            const canvasJSON = canvasEditorRef?.toJSON?.() ?? null;
+            const canvasJSON = canvasEditorRef?.toJSON ? await canvasEditorRef.toJSON() : null;
 
             // export image as PNG dataurl
             let dataURL: string | null = null;
@@ -297,9 +294,6 @@
                     : originalFileName;
             }
 
-            const origBackupName = originalFileName;
-            const origBackupPath = `${STORAGE_BACKUP_DIR}/${origBackupName}`;
-
             // Base the saved PNG on the edited image bytes (so edits are preserved)
             const buffer = new Uint8Array(await blob.arrayBuffer());
             const metaObj: any = {
@@ -315,16 +309,12 @@
                           : null,
             };
 
-            console.log('ImageEditor: canvasJSON from CanvasEditor:', canvasJSON);
-            console.log('ImageEditor: storageMode:', settings.storageMode);
 
             // Do not embed canvasJSON into PNG metadata when using backup mode
             if (settings.storageMode !== 'backup') {
                 metaObj.canvasJSON = canvasJSON;
-                console.log('ImageEditor: Added canvasJSON to metadata');
             }
             const metaValue = JSON.stringify(metaObj);
-            console.log('ImageEditor: Final metadata:', metaValue.substring(0, 200));
             const newBuffer = insertPNGTextChunk(buffer, 'siyuan-plugin-imgReEditor', metaValue);
             // Convert Uint8Array to ArrayBuffer for Blob constructor
             const newBlob = new Blob([newBuffer as any], { type: 'image/png' });
@@ -338,7 +328,8 @@
             // In backup mode, store canvasJSON/cropData as a separate JSON file
             if (settings.storageMode === 'backup') {
                 try {
-                    const backupJsonPath = `${origBackupPath}.json`;
+                    // Save JSON file in backup folder with .json extension
+                    const backupJsonPath = `${STORAGE_BACKUP_DIR}/${saveName}.json`;
                     const jsonObj = {
                         version: 1,
                         canvasJSON,
@@ -662,7 +653,6 @@
                 on:ready={() => {
                     editorReady = true;
 
-                    console.log('ImageEditor: on:ready fired, savedEditorData:', savedEditorData);
 
                     // For canvas mode with saved JSON, restore it now
                     if (
@@ -672,10 +662,6 @@
                         canvasEditorRef
                     ) {
                         try {
-                            console.log(
-                                'ImageEditor: Restoring canvasJSON in on:ready',
-                                savedEditorData.canvasJSON
-                            );
                             canvasEditorRef.fromJSON(savedEditorData.canvasJSON);
                             if (savedEditorData.cropData) {
                                 cropData = savedEditorData.cropData;
@@ -714,10 +700,7 @@
 
                     if (savedEditorData && savedEditorData.canvasJSON && canvasEditorRef) {
                         try {
-                            console.log(
-                                'ImageEditor: Restoring canvasJSON',
-                                savedEditorData.canvasJSON
-                            );
+
                             // For canvas mode with saved JSON, restore from JSON instead of using background
                             // This prevents showing the exported image as background
                             canvasEditorRef.fromJSON(savedEditorData.canvasJSON);
@@ -732,9 +715,7 @@
                             console.warn('Failed to restore canvas JSON to CanvasEditor', e);
                         }
                     } else {
-                        console.log(
-                            'ImageEditor: No savedEditorData or canvasJSON, fitting to viewport'
-                        );
+
                         // For new images without saved data, fit to viewport now
                         if (
                             canvasEditorRef &&
