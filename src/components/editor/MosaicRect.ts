@@ -142,27 +142,31 @@ export class MosaicRect extends Rect {
                 const canvasY = point.y;
 
                 // Adjust for bounding rect offset
-                const tempX = canvasX - boundingRect.left;
-                const tempY = canvasY - boundingRect.top;
+                const tempX = Math.floor(canvasX - boundingRect.left);
+                const tempY = Math.floor(canvasY - boundingRect.top);
+
+                // Check if we are within the temp canvas bounds to avoid unnecessary getImageData calls
+                if (tempX < 0 || tempX >= tempCanvas.width || tempY < 0 || tempY >= tempCanvas.height) {
+                    continue;
+                }
 
                 try {
                     // Sample the color from the center of the block
-                    const imageData = tempCtx.getImageData(
-                        Math.floor(tempX),
-                        Math.floor(tempY),
-                        1,
-                        1
-                    );
+                    const imageData = tempCtx.getImageData(tempX, tempY, 1, 1);
                     const pixel = imageData.data;
-                    const color = `rgb(${pixel[0]}, ${pixel[1]}, ${pixel[2]})`;
+
+                    // If the pixel is fully transparent, skip drawing this block
+                    if (pixel[3] === 0) {
+                        continue;
+                    }
+
+                    const color = `rgba(${pixel[0]}, ${pixel[1]}, ${pixel[2]}, ${pixel[3] / 255})`;
 
                     // Draw the block
                     ctx.fillStyle = color;
                     ctx.fillRect(x, y, blockW, blockH);
                 } catch (e) {
-                    // If sampling fails, use gray
-                    ctx.fillStyle = '#cccccc';
-                    ctx.fillRect(x, y, blockW, blockH);
+                    // If sampling fails (out of bounds), skip drawing to make it transparent
                 }
             }
         }
