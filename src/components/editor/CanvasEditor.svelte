@@ -580,12 +580,24 @@
                 isSpaceDown = true;
                 if (canvas) canvas.defaultCursor = 'grab';
             }
+            // Switch cursor to default when holding Ctrl (selection mode shortcut)
+            if ((e.key === 'Control' || e.key === 'Meta') && canvas) {
+                if (activeTool === 'shape' || activeTool === 'arrow') {
+                    canvas.defaultCursor = 'default';
+                }
+            }
         };
         onDocKeyUp = (e: KeyboardEvent) => {
             if (e.code === 'Space') {
                 isSpaceDown = false;
                 isDragging = false;
                 if (canvas) canvas.defaultCursor = 'default';
+            }
+            // Restore tool cursor when releasing Ctrl
+            if ((e.key === 'Control' || e.key === 'Meta') && canvas) {
+                if (activeTool === 'shape' || activeTool === 'arrow') {
+                    canvas.defaultCursor = 'crosshair';
+                }
             }
         };
         document.addEventListener('keydown', onDocKeyDown as any);
@@ -667,6 +679,9 @@
 
             // If shape tool active, start drawing on mouse down
             if (activeTool === 'shape') {
+                // Quick selection mode: if Ctrl is held, allow standard selection (including multi-select)
+                if (opt.e.ctrlKey || opt.e.metaKey) return;
+
                 // If user clicked on an existing object, allow selection/move instead of starting a new draw
                 let hit = opt.target;
                 try {
@@ -763,6 +778,9 @@
             }
             // Arrow tool: start drawing using custom Arrow class
             if (activeTool === 'arrow') {
+                // Quick selection mode: if Ctrl is held, allow standard selection
+                if (opt.e.ctrlKey || opt.e.metaKey) return;
+
                 // Only allow selecting arrows, not other shapes
                 let hit = opt.target;
                 try {
@@ -809,6 +827,7 @@
 
             // Number marker tool
             if (activeTool === 'number-marker') {
+                if (opt.e.ctrlKey || opt.e.metaKey) return;
                 // Only allow selecting number markers, not other shapes
                 let hit = opt.target;
                 try {
@@ -872,6 +891,7 @@
 
             // Mosaic tool: start drawing mosaic rectangle
             if (activeTool === 'mosaic') {
+                if (opt.e.ctrlKey || opt.e.metaKey) return;
                 // Only allow selecting mosaic rectangles, not other shapes
                 let hit = opt.target;
                 try {
@@ -917,6 +937,7 @@
 
             // Text tool: create or select an editable text object
             if (activeTool === 'text') {
+                if (opt.e.ctrlKey || opt.e.metaKey) return;
                 try {
                     // if clicked on an existing text object, select and enter edit mode instead of creating a new one
                     let hit = opt.target;
