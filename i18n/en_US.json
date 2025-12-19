@@ -1,6 +1,9 @@
 {
     "settings": {
         "settingsPanel": "Settings Panel",
+        "settingsGroup": {
+            "reset": "Reset"
+        },
         "storageMode": {
             "title": "Original Image Storage Method",
             "description": "Choose how to store the original image",
