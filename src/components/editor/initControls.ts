@@ -145,7 +145,25 @@ function initControls(canvas: Canvas) {
         x: 0,
         y: 0.5, // 旋转点在底部中间
         cursorStyle: 'pointer',
-        actionHandler: controlsUtils.rotationWithSnapping,
+        actionHandler: (eventData: TPointerEvent, transform: Transform, x: number, y: number) => {
+            const target = transform.target;
+            if (!target) return controlsUtils.rotationWithSnapping(eventData, transform, x, y);
+
+            // 保存中心点，调用默认旋转逻辑来更新 transform（保持与 fabric 内部状态一致）
+            const centerBefore = target.getCenterPoint();
+            const result = controlsUtils.rotationWithSnapping(eventData, transform, x, y);
+
+            // 当按住 Shift 时，将角度吸附到 45° 倍数，并把中心点还原，避免位置移动
+            if (eventData.shiftKey) {
+                const angle = target.angle;
+                const snappedAngle = Math.round(angle / 45) * 45;
+                target.set('angle', snappedAngle);
+                target.setPositionByOrigin(centerBefore, 'center', 'center');
+                target.setCoords();
+            }
+
+            return result;
+        },
         offsetY: 30, // 旋转手柄的偏移量
         actionName: 'rotate',
         render: createIconRenderer(rotateImgIcon, 40, 40),
