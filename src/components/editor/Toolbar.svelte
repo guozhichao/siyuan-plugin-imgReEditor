@@ -44,20 +44,20 @@
         </svg>
     </button>
     {#if !isCanvasMode}
-    <button
-        class="b3-button"
-        class:active={active === 'crop'}
-        class:b3-button--outline={active !== 'crop'}
-        on:click={() => emit('tool', { tool: 'crop' })}
-        title="裁剪工具"
-    >
-        <svg class="icon" viewBox="0 0 24 24">
-            <path d="M6.13 1L6 16a2 2 0 0 0 2 2h15" />
-            <path d="M1 6.13L16 6a2 2 0 0 1 2 2v15" />
-            <line x1="9" y1="9" x2="15" y2="15" />
-            <line x1="15" y1="9" x2="9" y2="15" />
-        </svg>
-    </button>
+        <button
+            class="b3-button"
+            class:active={active === 'crop'}
+            class:b3-button--outline={active !== 'crop'}
+            on:click={() => emit('tool', { tool: 'crop' })}
+            title="裁剪工具"
+        >
+            <svg class="icon" viewBox="0 0 24 24">
+                <path d="M6.13 1L6 16a2 2 0 0 0 2 2h15" />
+                <path d="M1 6.13L16 6a2 2 0 0 1 2 2v15" />
+                <line x1="9" y1="9" x2="15" y2="15" />
+                <line x1="15" y1="9" x2="9" y2="15" />
+            </svg>
+        </button>
     {/if}
     <div class="shape-group">
         <button
@@ -148,33 +148,33 @@
         </svg>
     </button>
     {#if !isCanvasMode}
-    <button
-        class="b3-button"
-        class:active={active === 'mosaic'}
-        class:b3-button--outline={active !== 'mosaic'}
-        on:click={() => emit('tool', { tool: 'mosaic' })}
-        title="马赛克"
-    >
-        <svg class="fill-icon" viewBox="0 0 1024 1024">
-            <path
-                d="M853.323294 712.794353h-140.528941v140.528941h140.528941zM572.235294 712.794353h-140.559059v140.528941H572.235294zM291.147294 712.794353H150.588235v140.528941h140.559059zM853.323294 431.676235h-140.528941V572.235294h140.528941zM572.235294 431.676235h-140.559059V572.235294H572.235294zM291.147294 431.676235H150.588235V572.235294h140.559059zM853.323294 150.588235h-140.528941v140.559059h140.528941zM572.235294 150.588235h-140.559059v140.559059H572.235294zM291.147294 150.588235H150.588235v140.559059h140.559059zM431.676235 291.147294H291.147294v140.528941h140.528941zM431.676235 572.235294H291.147294v140.559059h140.528941zM712.794353 291.147294H572.235294v140.528941h140.559059zM712.794353 572.235294H572.235294v140.559059h140.559059z"
-            ></path>
-        </svg>
-    </button>
+        <button
+            class="b3-button"
+            class:active={active === 'mosaic'}
+            class:b3-button--outline={active !== 'mosaic'}
+            on:click={() => emit('tool', { tool: 'mosaic' })}
+            title="马赛克"
+        >
+            <svg class="fill-icon" viewBox="0 0 1024 1024">
+                <path
+                    d="M853.323294 712.794353h-140.528941v140.528941h140.528941zM572.235294 712.794353h-140.559059v140.528941H572.235294zM291.147294 712.794353H150.588235v140.528941h140.559059zM853.323294 431.676235h-140.528941V572.235294h140.528941zM572.235294 431.676235h-140.559059V572.235294H572.235294zM291.147294 431.676235H150.588235V572.235294h140.559059zM853.323294 150.588235h-140.528941v140.559059h140.528941zM572.235294 150.588235h-140.559059v140.559059H572.235294zM291.147294 150.588235H150.588235v140.559059h140.559059zM431.676235 291.147294H291.147294v140.528941h140.528941zM431.676235 572.235294H291.147294v140.559059h140.528941zM712.794353 291.147294H572.235294v140.528941h140.559059zM712.794353 572.235294H572.235294v140.559059h140.559059z"
+                ></path>
+            </svg>
+        </button>
     {/if}
     {#if !isCanvasMode}
-    <button
-        class="b3-button"
-        class:active={active === 'image-border'}
-        class:b3-button--outline={active !== 'image-border'}
-        on:click={() => emit('tool', { tool: 'image-border' })}
-        title="图片边框"
-    >
-        <svg class="icon" viewBox="0 0 24 24">
-            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-            <rect x="7" y="7" width="10" height="10" rx="1" ry="1" />
-        </svg>
-    </button>
+        <button
+            class="b3-button"
+            class:active={active === 'image-border'}
+            class:b3-button--outline={active !== 'image-border'}
+            on:click={() => emit('tool', { tool: 'image-border' })}
+            title="图片边框"
+        >
+            <svg class="icon" viewBox="0 0 24 24">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                <rect x="7" y="7" width="10" height="10" rx="1" ry="1" />
+            </svg>
+        </button>
     {/if}
     {#if isCanvasMode}
         <button
@@ -192,20 +192,20 @@
         </button>
     {/if}
     {#if !isCanvasMode}
-    <button
-        class="b3-button"
-        class:active={active === 'transform'}
-        class:b3-button--outline={active !== 'transform'}
-        on:click={() => emit('tool', { tool: 'transform' })}
-        title="变换"
-    >
-        <svg class="fill-icon" viewBox="0 0 1024 1024">
-            <path d="M1024 0v1024H0V0z" fill="#FFFFFF" fill-opacity=".01" />
-            <path
-                d="M948.363636 386.327273c45.917091 19.828364 33.186909 87.156364-15.080727 90.368l-3.607273 0.116363H121.274182a47.150545 47.150545 0 0 1-47.034182-43.659636l-0.139636-3.490909V80.826182c0-32.744727 32.349091-55.156364 62.603636-44.567273l3.258182 1.256727L948.363636 386.350545z m-18.688 160.861091c50.013091 0 65.000727 66.885818 21.946182 88.925091l-3.258182 1.536L139.938909 986.461091a47.173818 47.173818 0 0 1-65.722182-39.842909l-0.116363-3.467637V594.385455c0-24.878545 19.246545-45.242182 43.636363-47.034182l3.537455-0.139637h808.401454z m-228.328727-164.724364L168.424727 152.552727v229.911273h532.922182z m0 259.048727H168.424727v229.911273l532.922182-229.911273z"
-            />
-        </svg>
-    </button>
+        <button
+            class="b3-button"
+            class:active={active === 'transform'}
+            class:b3-button--outline={active !== 'transform'}
+            on:click={() => emit('tool', { tool: 'transform' })}
+            title="变换"
+        >
+            <svg class="fill-icon" viewBox="0 0 1024 1024">
+                <path d="M1024 0v1024H0V0z" fill="#FFFFFF" fill-opacity=".01" />
+                <path
+                    d="M948.363636 386.327273c45.917091 19.828364 33.186909 87.156364-15.080727 90.368l-3.607273 0.116363H121.274182a47.150545 47.150545 0 0 1-47.034182-43.659636l-0.139636-3.490909V80.826182c0-32.744727 32.349091-55.156364 62.603636-44.567273l3.258182 1.256727L948.363636 386.350545z m-18.688 160.861091c50.013091 0 65.000727 66.885818 21.946182 88.925091l-3.258182 1.536L139.938909 986.461091a47.173818 47.173818 0 0 1-65.722182-39.842909l-0.116363-3.467637V594.385455c0-24.878545 19.246545-45.242182 43.636363-47.034182l3.537455-0.139637h808.401454z m-228.328727-164.724364L168.424727 152.552727v229.911273h532.922182z m0 259.048727H168.424727v229.911273l532.922182-229.911273z"
+                />
+            </svg>
+        </button>
     {/if}
     <button
         class="b3-button b3-button--outline"
