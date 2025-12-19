@@ -1127,8 +1127,27 @@
             // if arrow drawing in progress
             if (activeTool === 'arrow' && tempArrow) {
                 const pointer = canvas.getPointer(opt.e);
-                // Simply update the arrow's endpoint
-                tempArrow.set({ x2: pointer.x, y2: pointer.y });
+                let x2 = pointer.x;
+                let y2 = pointer.y;
+
+                // If Shift is held, constrain to 45-degree increments
+                if ((opt.e as MouseEvent).shiftKey) {
+                    const dx = x2 - arrowStart.x;
+                    const dy = y2 - arrowStart.y;
+                    const angle = Math.atan2(dy, dx);
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+
+                    // Round to nearest 45 degrees (π/4 radians)
+                    const increment = Math.PI / 4;
+                    const snappedAngle = Math.round(angle / increment) * increment;
+
+                    // Calculate new endpoint based on snapped angle
+                    x2 = arrowStart.x + distance * Math.cos(snappedAngle);
+                    y2 = arrowStart.y + distance * Math.sin(snappedAngle);
+                }
+
+                // Update the arrow's endpoint
+                tempArrow.set({ x2, y2 });
                 tempArrow.setCoords();
                 canvas.requestRenderAll();
                 return;
