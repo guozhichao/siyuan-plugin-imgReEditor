@@ -4,9 +4,19 @@
     import { t } from './utils/i18n';
     import { getDefaultSettings } from './defaultSettings';
     import { pushMsg, pushErrMsg, readDir, removeFile } from './api';
-    import { confirm } from 'siyuan';
+    import { confirm,Constants } from 'siyuan';
     export let plugin;
-
+    export const useShell = async (cmd: 'showItemInFolder' | 'openPath', filePath: string) => {
+            try {
+                const { ipcRenderer } = window.require('electron');
+                ipcRenderer.send(Constants.SIYUAN_CMD, {
+                    cmd,
+                    filePath: filePath,
+                });
+            } catch (error) {
+                await pushErrMsg('当前客户端不支持打开插件数据文件夹');
+            }
+        };
     // 使用动态默认设置
     let settings = { ...getDefaultSettings() };
 
@@ -30,6 +40,22 @@
                         embed: t('settings.storageMode.options.embed'),
                         backup: t('settings.storageMode.options.backup'),
                     },
+                },                
+                {
+                    key: 'openDataFolder',
+                    value: '',
+                    type: 'button',
+                    title: '打开插件数据文件夹',
+                    description: '',
+                    button: {
+                        label: '打开文件夹',
+                        callback: async () => {
+                            const path =
+                                window.siyuan.config.system.dataDir +
+                                '/storage/petal/siyuan-plugin-imgReEditor';
+                            await useShell('openPath', path);
+                        },
+                    },
                 },
                 {
                     key: 'clearBackup',
@@ -37,7 +63,7 @@
                     type: 'button',
                     title: '清空 backup 文件夹',
                     description:
-                        '清空 data/storage/petal/siyuan-plugin-imgReEditor/backup 下的所有文件（不可恢复）',
+                        '清空 data/storage/petal/siyuan-plugin-imgReEditor/backup 下的所有文件（不可恢复，删除后无法再二次编辑backup模式下编辑保存的图片）',
                     button: {
                         label: '清空 backup',
                         callback: async () => {
