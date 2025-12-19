@@ -57,7 +57,7 @@
         '_isCropRect',
         'count', // for NumberMarker
         'textColor', // for NumberMarker
-        'fontSize', // for NumberMarker
+        'radius', // for NumberMarker
         '_originalSrc',
         '_cropOffset',
         '_isImageBorder',
@@ -277,7 +277,7 @@
                     'arrowHead',
                     'count',
                     'textColor',
-                    'fontSize',
+                    'radius',
                 ])
             );
 
@@ -656,7 +656,7 @@
 
             // If shape tool active, start drawing on mouse down
             if (activeTool === 'shape') {
-                // Only allow selecting shapes that match the current tool (rect/ellipse/circle)
+                // If user clicked on an existing object, allow selection/move instead of starting a new draw
                 let hit = opt.target;
                 try {
                     if (!hit && canvas && typeof (canvas as any).findTarget === 'function') {
@@ -665,24 +665,14 @@
                 } catch (e) {
                     /* ignore */
                 }
-                // Only allow selection if the hit object is a shape type (rect, ellipse, circle)
-                const allowedShapeTypes = ['rect', 'ellipse', 'circle'];
-                if (hit && allowedShapeTypes.includes(hit.type)) {
+                if (hit) {
                     try {
                         canvas.setActiveObject(hit);
                         canvas.requestRenderAll();
                     } catch (e) {}
                     return;
                 }
-                // If hit a non-matching object, clear selection and prevent default interaction
-                // This prevents moving images or other objects when drawing shapes
-                if (hit) {
-                    try {
-                        canvas.discardActiveObject();
-                        canvas.requestRenderAll();
-                    } catch (e) {}
-                }
-                // Clear any active object to ensure new drawing can start
+                // If no hit and there is an active object, clear selection so new drawing can start
                 try {
                     const current = canvas.getActiveObject && canvas.getActiveObject();
                     if (current) {
@@ -752,29 +742,18 @@
             }
             // Arrow tool: start drawing using custom Arrow class
             if (activeTool === 'arrow') {
-                // Only allow selecting arrows, not other shapes
+                // if clicked on an existing object, select it instead of starting a new arrow
                 let hit = opt.target;
                 try {
                     if (!hit && canvas && typeof (canvas as any).findTarget === 'function') {
                         hit = (canvas as any).findTarget(opt.e);
                     }
                 } catch (e) {}
-                // Only allow selection if the hit object is an arrow
-                if (
-                    hit &&
-                    (hit.type === 'arrow' || (hit.type === 'line' && (hit as any).arrowHead))
-                ) {
+                if (hit) {
                     try {
                         canvas.setActiveObject(hit);
                         canvas.requestRenderAll();
                         return;
-                    } catch (e) {}
-                }
-                // If hit a non-arrow object, clear selection to prevent moving it
-                if (hit) {
-                    try {
-                        canvas.discardActiveObject();
-                        canvas.requestRenderAll();
                     } catch (e) {}
                 }
 
@@ -798,7 +777,7 @@
 
             // Number marker tool
             if (activeTool === 'number-marker') {
-                // Only allow selecting number markers, not other shapes
+                // if clicked on an existing object, select it instead
                 let hit = opt.target;
                 try {
                     if (!hit && canvas && typeof (canvas as any).findTarget === 'function') {
@@ -806,8 +785,7 @@
                     }
                 } catch (e) {}
 
-                // Only allow selection if the hit object is a number marker
-                if (hit && hit.type === 'number-marker') {
+                if (hit) {
                     try {
                         canvas.setActiveObject(hit);
 
@@ -819,17 +797,10 @@
                     } catch (e) {}
                     return;
                 }
-                // If hit a non-marker object, clear selection to prevent moving it
-                if (hit) {
-                    try {
-                        canvas.discardActiveObject();
-                        canvas.requestRenderAll();
-                    } catch (e) {}
-                }
 
                 // Create new NumberMarker
                 const fill = activeToolOptions.fill || '#ff0000';
-                const fontSize = activeToolOptions.fontSize || 20;
+                const radius = activeToolOptions.radius || 15;
                 // Use counter then increment
                 const mk = new NumberMarker({
                     left: pointer.x,
@@ -842,7 +813,7 @@
                     selectable: true,
                     evented: true,
                     erasable: true,
-                    fontSize: fontSize,
+                    radius: radius,
                 });
 
                 canvas.add(mk);
@@ -861,26 +832,18 @@
 
             // Mosaic tool: start drawing mosaic rectangle
             if (activeTool === 'mosaic') {
-                // Only allow selecting mosaic rectangles, not other shapes
+                // if clicked on an existing object, select it instead
                 let hit = opt.target;
                 try {
                     if (!hit && canvas && typeof (canvas as any).findTarget === 'function') {
                         hit = (canvas as any).findTarget(opt.e);
                     }
                 } catch (e) {}
-                // Only allow selection if the hit object is a mosaic-rect
-                if (hit && hit.type === 'mosaic-rect') {
+                if (hit) {
                     try {
                         canvas.setActiveObject(hit);
                         canvas.requestRenderAll();
                         return;
-                    } catch (e) {}
-                }
-                // If hit a non-mosaic object, clear selection to prevent moving it
-                if (hit) {
-                    try {
-                        canvas.discardActiveObject();
-                        canvas.requestRenderAll();
                     } catch (e) {}
                 }
 
@@ -1248,7 +1211,7 @@
                         options: {
                             fill: fillVal,
                             count: (active as any).count,
-                            fontSize: (active as any).fontSize,
+                            radius: (active as any).radius,
                             nextNumber: currentNumber,
                             isSelection: true,
                         },
@@ -2760,7 +2723,7 @@
         if (activeTool === 'number-marker') {
             return {
                 ...(activeToolOptions || {}),
-                fontSize: activeToolOptions?.fontSize || 20, // default
+                radius: activeToolOptions?.radius || 15, // default
                 count: currentNumber,
                 nextNumber: currentNumber, // If selection active, this value might be overridden by updated logic below to show global next
                 isSelection: false,
@@ -2941,11 +2904,10 @@
                                 o.set('count', options.count);
                                 o.dirty = true;
                             }
-                            if (typeof options.fontSize !== 'undefined') {
-                                o.set('fontSize', options.fontSize);
-                                const radius = options.fontSize * 0.8;
-                                o.set('width', radius * 2);
-                                o.set('height', radius * 2);
+                            if (typeof options.radius !== 'undefined') {
+                                o.set('radius', options.radius);
+                                o.set('width', options.radius * 2);
+                                o.set('height', options.radius * 2);
                                 o.dirty = true;
                             }
                         }
@@ -3044,73 +3006,30 @@
         }
     }
 
-    export async function toJSON() {
+    export function toJSON() {
         if (!canvas) return null;
         // Standard toJSON includes HISTORY_PROPS for top-level objects.
         // We also want to ensure custom metadata on backgroundImage is included.
         const json = (canvas as any).toJSON(HISTORY_PROPS);
 
-
+        console.log(
+            'CanvasEditor: toJSON called, objects count:',
+            canvas.getObjects().length,
+            'canvas size:',
+            canvas.getWidth(),
+            'x',
+            canvas.getHeight(),
+            'isCanvasMode:',
+            isCanvasMode
+        );
 
         // For canvas mode, add canvas dimensions and remove backgroundImage to avoid blob URL issues
         if (isCanvasMode) {
             json.width = canvas.getWidth();
             json.height = canvas.getHeight();
             if (json.backgroundImage) {
+                console.log('CanvasEditor: Removing backgroundImage for canvas mode');
                 delete json.backgroundImage;
-            }
-
-            // Convert blob URLs to base64 data URLs for permanent storage
-            if (json.objects) {
-                const conversionPromises: Promise<void>[] = [];
-
-                json.objects.forEach((obj: any, index: number) => {
-                    // Fabric.js uses 'Image' (capital I) for image objects
-                    if (
-                        obj.type &&
-                        obj.type.toLowerCase() === 'image' &&
-                        obj.src &&
-                        obj.src.startsWith('blob:')
-                    ) {
-
-                        // Create a promise to convert blob URL to data URL
-                        const conversionPromise = new Promise<void>(resolve => {
-                            const img = new Image();
-                            img.crossOrigin = 'anonymous';
-                            img.onload = () => {
-                                try {
-                                    const tempCanvas = document.createElement('canvas');
-                                    tempCanvas.width = img.naturalWidth || img.width;
-                                    tempCanvas.height = img.naturalHeight || img.height;
-                                    const ctx = tempCanvas.getContext('2d');
-                                    if (ctx) {
-                                        ctx.drawImage(img, 0, 0);
-                                        const dataURL = tempCanvas.toDataURL('image/png');
-                                        obj.src = dataURL;
-                                    }
-                                } catch (e) {
-                                    console.error(`Failed to convert image ${index} to base64:`, e);
-                                }
-                                resolve();
-                            };
-                            img.onerror = () => {
-                                console.error(
-                                    `Failed to load image ${index} from blob URL:`,
-                                    obj.src
-                                );
-                                resolve();
-                            };
-                            img.src = obj.src;
-                        });
-
-                        conversionPromises.push(conversionPromise);
-                    }
-                });
-
-                // Wait for all conversions to complete
-                if (conversionPromises.length > 0) {
-                    await Promise.all(conversionPromises);
-                }
             }
         } else if (canvas.backgroundImage && json.backgroundImage) {
             const bg = canvas.backgroundImage as any;
@@ -3132,13 +3051,26 @@
         isHistoryProcessing = true;
 
         try {
+            console.log('CanvasEditor: fromJSON called', json);
 
             await canvas.loadFromJSON(json);
 
             // Restore canvas dimensions if they were saved (loadFromJSON should handle this, but ensure it)
             if (json.width && json.height) {
+                console.log(
+                    'CanvasEditor: Restoring canvas dimensions:',
+                    json.width,
+                    'x',
+                    json.height
+                );
                 canvas.setDimensions({ width: json.width, height: json.height });
             } else {
+                console.log(
+                    'CanvasEditor: No dimensions in JSON, current size:',
+                    canvas.getWidth(),
+                    'x',
+                    canvas.getHeight()
+                );
             }
 
             // For canvas mode, add boundary rectangle
@@ -3193,6 +3125,10 @@
 
             canvas!.renderAll();
 
+            console.log(
+                'CanvasEditor: fromJSON completed, objects count:',
+                canvas.getObjects().length
+            );
 
             // Automatically fit to viewport after loading JSON
             setTimeout(() => {

@@ -16,17 +16,41 @@
 
 ![](https://fastly.jsdelivr.net/gh/Achuan-2/PicBed/assets/20251219120448-2025-12-19.png)
 
+斜杆菜单输入`/画布`可以开启画布模式，在画布添加多个图片
+
+![](https://fastly.jsdelivr.net/gh/Achuan-2/PicBed/assets/20251219185938-2025-12-19.png)
+
 ## 功能介绍
 
 在思源笔记中编辑图片，支持：
 
-- 支持裁剪翻转图片，支持添加文字、添加矩形椭圆、添加箭头、添加数字序号、画笔等功能
+- 图片编辑功能
+
+  - 支持裁剪图片
+  - 支持水平/垂直翻转、旋转图片
+  - 添加文字
+  - 添加矩形椭圆
+  - 添加箭头
+  - 添加数字序号
+  - 添加画笔
+  - 添加马赛克
+  - 添加图片边框
 - 保存png图片支持二次编辑插件添加的图片修改和标注内容
 
-![](https://fastly.jsdelivr.net/gh/Achuan-2/PicBed/assets/20251219121902-2025-12-19.png)
+![](https://fastly.jsdelivr.net/gh/Achuan-2/PicBed/assets/20251219185953-2025-12-19.png)
 
-**快捷键**
+插件支持快速添加图片边框，把图改为精致的博客风格，如果你想要创建这样的图
+
+![](https://fastly.jsdelivr.net/gh/Achuan-2/PicBed/assets/20251219190004-2025-12-19.png)
+
+现在只需要一键就可以创建了，让思源可以成为你的图文写作神器！
+
+![](https://fastly.jsdelivr.net/gh/Achuan-2/PicBed/assets/PixPin_2025-12-19_16-20-19-2025-12-19.gif)
+
+## **快捷键**
+
 - Esc：
+
   - 选中形状后取消选中；
   - 编辑文字后按Esc可变为选中状态进行移动，再按Esc则取消选中
 - Ctrl+C/Ctrl+V：复制/粘贴
