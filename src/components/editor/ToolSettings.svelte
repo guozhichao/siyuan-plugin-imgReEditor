@@ -597,30 +597,139 @@
             </div>
         </div>
     {:else if tool === 'align'}
-        <div style="padding:8px; display:grid; grid-template-columns:repeat(4,1fr); gap:6px;">
-            <!-- Row 1: Horizontal Align left/center/right + Align to canvas (h) -->
-            <button on:click={() => dispatch('action', { action: 'align', type: 'h-left', forceCanvas: false })}>左对齐</button>
-            <button on:click={() => dispatch('action', { action: 'align', type: 'h-center', forceCanvas: false })}>水平居中</button>
-            <button on:click={() => dispatch('action', { action: 'align', type: 'h-right', forceCanvas: false })}>右对齐</button>
-            <button on:click={() => dispatch('action', { action: 'align', type: 'h-center', forceCanvas: true })}>以画布水平居中对齐</button>
+        <div class="align-grid">
+            <!-- Row 1: Horizontal align -->
+            <button class="icon-btn" title="左对齐" on:click={() => dispatch('action', { action: 'align', type: 'h-left', forceCanvas: false })}>
+                <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+                    <rect x="3" y="4" width="4" height="4" rx="1" />
+                    <rect x="3" y="10" width="10" height="4" rx="1" />
+                    <rect x="3" y="16" width="16" height="4" rx="1" />
+                </svg>
+            </button>
+            <button class="icon-btn" title="水平居中" on:click={() => dispatch('action', { action: 'align', type: 'h-center', forceCanvas: false })}>
+                <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+                    <rect x="7" y="4" width="10" height="4" rx="1" />
+                    <rect x="5" y="10" width="14" height="4" rx="1" />
+                    <rect x="3" y="16" width="18" height="4" rx="1" />
+                    <line x1="12" y1="2" x2="12" y2="22" stroke="currentColor" stroke-width="0.5" stroke-opacity="0.6" />
+                </svg>
+            </button>
+            <button class="icon-btn" title="右对齐" on:click={() => dispatch('action', { action: 'align', type: 'h-right', forceCanvas: false })}>
+                <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+                    <rect x="17" y="4" width="4" height="4" rx="1" />
+                    <rect x="11" y="10" width="10" height="4" rx="1" />
+                    <rect x="5" y="16" width="16" height="4" rx="1" />
+                </svg>
+            </button>
+            <button class="icon-btn" title="以画布水平居中对齐" on:click={() => dispatch('action', { action: 'align', type: 'h-center', forceCanvas: true })}>
+                <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+                    <rect x="7" y="6" width="10" height="12" rx="1" fill-opacity="0.06" />
+                    <line x1="12" y1="2" x2="12" y2="22" stroke="currentColor" stroke-width="1" stroke-opacity="0.6" />
+                </svg>
+            </button>
 
-            <!-- Row 2: Vertical Align top/middle/bottom + Align to canvas (v) -->
-            <button on:click={() => dispatch('action', { action: 'align', type: 'v-top', forceCanvas: false })}>顶对齐</button>
-            <button on:click={() => dispatch('action', { action: 'align', type: 'v-middle', forceCanvas: false })}>垂直居中</button>
-            <button on:click={() => dispatch('action', { action: 'align', type: 'v-bottom', forceCanvas: false })}>底对齐</button>
-            <button on:click={() => dispatch('action', { action: 'align', type: 'v-middle', forceCanvas: true })}>以画布垂直居中对齐</button>
+            <!-- Row 2: Vertical align -->
+            <button class="icon-btn" title="顶对齐" on:click={() => dispatch('action', { action: 'align', type: 'v-top', forceCanvas: false })}>
+                <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+                    <rect x="4" y="3" width="4" height="4" rx="1" />
+                    <rect x="10" y="3" width="4" height="10" rx="1" />
+                    <rect x="16" y="3" width="4" height="16" rx="1" />
+                </svg>
+            </button>
+            <button class="icon-btn" title="垂直居中" on:click={() => dispatch('action', { action: 'align', type: 'v-middle', forceCanvas: false })}>
+                <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+                    <rect x="4" y="7" width="4" height="10" rx="1" />
+                    <rect x="10" y="5" width="4" height="14" rx="1" />
+                    <rect x="16" y="3" width="4" height="18" rx="1" />
+                    <line x1="2" y1="12" x2="22" y2="12" stroke="currentColor" stroke-width="0.5" stroke-opacity="0.6" />
+                </svg>
+            </button>
+            <button class="icon-btn" title="底对齐" on:click={() => dispatch('action', { action: 'align', type: 'v-bottom', forceCanvas: false })}>
+                <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+                    <rect x="4" y="17" width="4" height="4" rx="1" />
+                    <rect x="10" y="11" width="4" height="10" rx="1" />
+                    <rect x="16" y="5" width="4" height="16" rx="1" />
+                </svg>
+            </button>
+            <button class="icon-btn" title="以画布垂直居中对齐" on:click={() => dispatch('action', { action: 'align', type: 'v-middle', forceCanvas: true })}>
+                <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+                    <rect x="6" y="7" width="12" height="10" rx="1" fill-opacity="0.06" />
+                    <line x1="2" y1="12" x2="22" y2="12" stroke="currentColor" stroke-width="1" stroke-opacity="0.6" />
+                </svg>
+            </button>
 
-            <!-- Row 3: Horizontal distribute by left/center/right + even spacing -->
-            <button on:click={() => dispatch('action', { action: 'distribute', type: 'h-left' })}>水平分布 左边</button>
-            <button on:click={() => dispatch('action', { action: 'distribute', type: 'h-center' })}>水平分布 居中</button>
-            <button on:click={() => dispatch('action', { action: 'distribute', type: 'h-right' })}>水平分布 右边</button>
-            <button on:click={() => dispatch('action', { action: 'distribute', type: 'h-even' })}>水平等距</button>
+            <!-- Row 3: Horizontal distribute -->
+            <button class="icon-btn" title="水平分布（左对齐）" on:click={() => dispatch('action', { action: 'distribute', type: 'h-left' })}>
+                <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+                    <!-- long lines at left edges -->
+                    <line x1="8" y1="3" x2="8" y2="21" stroke="currentColor" stroke-width="1" stroke-opacity="0.9" />
+                    <rect x="9" y="7" width="4" height="10" rx="1" />
+                    <line x1="14" y1="3" x2="14" y2="21" stroke="currentColor" stroke-width="1" stroke-opacity="0.9" />
+                    <rect x="15" y="7" width="4" height="10" rx="1" />
+                </svg>
+            </button>
+            <button class="icon-btn" title="水平分布（中心对齐）" on:click={() => dispatch('action', { action: 'distribute', type: 'h-center' })}>
+                <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+                    <!-- long lines at centers -->
+                    <line x1="8" y1="3" x2="8" y2="21" stroke="currentColor" stroke-width="1" stroke-opacity="0.9" />
+                    <rect x="6" y="7" width="4" height="10" rx="1" />
+                    <line x1="16" y1="3" x2="16" y2="21" stroke="currentColor" stroke-width="1" stroke-opacity="0.9" />
+                    <rect x="14" y="7" width="4" height="10" rx="1" />
+                </svg>
+            </button>
+            <button class="icon-btn" title="水平分布（右对齐）" on:click={() => dispatch('action', { action: 'distribute', type: 'h-right' })}>
+                <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+                    <!-- long lines at right edges -->
+                    <rect x="5" y="7" width="4" height="10" rx="1" />
+                    <line x1="10" y1="3" x2="10" y2="21" stroke="currentColor" stroke-width="1" stroke-opacity="0.9" />
+                    <rect x="13" y="7" width="4" height="10" rx="1" />
+                    <line x1="18" y1="3" x2="18" y2="21" stroke="currentColor" stroke-width="1" stroke-opacity="0.9" />
+                </svg>
+            </button>
+            <button class="icon-btn" title="水平等距" on:click={() => dispatch('action', { action: 'distribute', type: 'h-even' })}>
+                <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+                    <rect x="3" y="6" width="4" height="12" rx="1" />
+                    <rect x="10" y="6" width="4" height="12" rx="1" />
+                    <rect x="17" y="6" width="4" height="12" rx="1" />
+                    <line x1="0" y1="3" x2="24" y2="3" stroke="none" />
+                </svg>
+            </button>
 
-            <!-- Row 4: Vertical distribute by top/center/bottom + even spacing -->
-            <button on:click={() => dispatch('action', { action: 'distribute', type: 'v-top' })}>垂直分布 顶部</button>
-            <button on:click={() => dispatch('action', { action: 'distribute', type: 'v-center' })}>垂直分布 居中</button>
-            <button on:click={() => dispatch('action', { action: 'distribute', type: 'v-bottom' })}>垂直分布 底部</button>
-            <button on:click={() => dispatch('action', { action: 'distribute', type: 'v-even' })}>垂直等距</button>
+            <!-- Row 4: Vertical distribute -->
+            <button class="icon-btn" title="垂直分布（顶部对齐）" on:click={() => dispatch('action', { action: 'distribute', type: 'v-top' })}>
+                <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+                    <!-- horizontal long lines at top edges -->
+                    <line x1="3" y1="8" x2="21" y2="8" stroke="currentColor" stroke-width="1" stroke-opacity="0.9" />
+                    <rect x="7" y="9" width="10" height="4" rx="1" />
+                    <line x1="3" y1="14" x2="21" y2="14" stroke="currentColor" stroke-width="1" stroke-opacity="0.9" />
+                    <rect x="7" y="15" width="10" height="4" rx="1" />
+                </svg>
+            </button>
+            <button class="icon-btn" title="垂直分布（居中对齐）" on:click={() => dispatch('action', { action: 'distribute', type: 'v-center' })}>
+                <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+                    <!-- horizontal long lines at centers -->
+                    <line x1="3" y1="8" x2="21" y2="8" stroke="currentColor" stroke-width="1" stroke-opacity="0.9" />
+                    <rect x="7" y="5" width="10" height="4" rx="1" />
+                    <line x1="3" y1="12" x2="21" y2="12" stroke="currentColor" stroke-width="1" stroke-opacity="0.9" />
+                    <rect x="7" y="11" width="10" height="4" rx="1" />
+                </svg>
+            </button>
+            <button class="icon-btn" title="垂直分布（底部对齐）" on:click={() => dispatch('action', { action: 'distribute', type: 'v-bottom' })}>
+                <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+                    <!-- horizontal long lines at bottom edges -->
+                    <rect x="7" y="3" width="10" height="4" rx="1" />
+                    <line x1="3" y1="8" x2="21" y2="8" stroke="currentColor" stroke-width="1" stroke-opacity="0.9" />
+                    <rect x="7" y="11" width="10" height="4" rx="1" />
+                    <line x1="3" y1="16" x2="21" y2="16" stroke="currentColor" stroke-width="1" stroke-opacity="0.9" />
+                </svg>
+            </button>
+            <button class="icon-btn" title="垂直等距" on:click={() => dispatch('action', { action: 'distribute', type: 'v-even' })}>
+                <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+                    <rect x="6" y="3" width="12" height="4" rx="1" />
+                    <rect x="6" y="10" width="12" height="4" rx="1" />
+                    <rect x="6" y="17" width="12" height="4" rx="1" />
+                </svg>
+            </button>
         </div>
     {:else}
         <div class="empty">暂无设置</div>
@@ -664,6 +773,28 @@
     }
     button:hover {
         background: #f5f5f5;
+    }
+    .align-grid {
+        padding: 8px;
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 6px;
+        align-items: center;
+        justify-items: center;
+    }
+    .icon-btn {
+        padding: 6px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 40px;
+        height: 36px;
+        border-radius: 6px;
+    }
+    .icon-btn svg {
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1;
     }
     button.active {
         background: var(--b3-theme-primary-lightest, #e3f2fd);

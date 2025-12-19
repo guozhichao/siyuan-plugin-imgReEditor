@@ -782,7 +782,8 @@
                             // Auto-activate corresponding tool ONLY if current tool is NOT 'select' or 'align'
                             // Treat 'align' like 'select' so selecting objects while align tool is active
                             // does not switch to shape/text/arrow tools and supports multi-select (Ctrl)
-                            const shouldAutoActivate = activeTool !== 'select' && activeTool !== 'align';
+                            const shouldAutoActivate =
+                                activeTool !== 'select' && activeTool !== 'align';
 
                             if (type === 'rect' || type === 'ellipse' || type === 'circle') {
                                 const shapeType =
@@ -1007,7 +1008,10 @@
                                     const type = e.detail.type;
                                     const forceCanvas = !!e.detail.forceCanvas;
                                     try {
-                                        if (canvasEditorRef && typeof canvasEditorRef.alignObjects === 'function') {
+                                        if (
+                                            canvasEditorRef &&
+                                            typeof canvasEditorRef.alignObjects === 'function'
+                                        ) {
                                             canvasEditorRef.alignObjects(type, forceCanvas);
                                         }
                                     } catch (err) {
@@ -1016,7 +1020,10 @@
                                 } else if (action === 'distribute') {
                                     const type = e.detail.type;
                                     try {
-                                        if (canvasEditorRef && typeof canvasEditorRef.distributeObjects === 'function') {
+                                        if (
+                                            canvasEditorRef &&
+                                            typeof canvasEditorRef.distributeObjects === 'function'
+                                        ) {
                                             canvasEditorRef.distributeObjects(type);
                                         }
                                     } catch (err) {

@@ -3645,7 +3645,7 @@
                     'textbox',
                     'text',
                     'number-marker',
-                    'image'
+                    'image',
                 ].includes(o.type)
             );
             if (allowed.length === 0) return;
@@ -3667,7 +3667,12 @@
                         const bg = canvas.backgroundImage as any;
                         // Use Fabric's getBoundingRect to compute actual displayed bounds
                         const brect = bg.getBoundingRect(true);
-                        refRect = { left: brect.left, top: brect.top, width: brect.width, height: brect.height };
+                        refRect = {
+                            left: brect.left,
+                            top: brect.top,
+                            width: brect.width,
+                            height: brect.height,
+                        };
                     } catch (e) {
                         refRect = null;
                     }
@@ -3677,9 +3682,19 @@
                 if (!refRect) {
                     const boundary = canvas.getObjects().find((o: any) => o._isCanvasBoundary);
                     if (boundary) {
-                        refRect = { left: boundary.left || 0, top: boundary.top || 0, width: boundary.width || canvas.getWidth(), height: boundary.height || canvas.getHeight() };
+                        refRect = {
+                            left: boundary.left || 0,
+                            top: boundary.top || 0,
+                            width: boundary.width || canvas.getWidth(),
+                            height: boundary.height || canvas.getHeight(),
+                        };
                     } else {
-                        refRect = { left: 0, top: 0, width: canvas.getWidth(), height: canvas.getHeight() };
+                        refRect = {
+                            left: 0,
+                            top: 0,
+                            width: canvas.getWidth(),
+                            height: canvas.getHeight(),
+                        };
                     }
                 }
             }
@@ -3749,7 +3764,7 @@
                     'textbox',
                     'text',
                     'number-marker',
-                    'image'
+                    'image',
                 ].includes(o.type)
             );
             if (allowed.length < 2) return;
@@ -3783,8 +3798,14 @@
                     // sort by left
                     items.sort((a: any, b: any) => a.rect.left - b.rect.left);
                     const minLeft = items[0].rect.left;
-                    const maxRight = items.reduce((acc: number, it: any) => Math.max(acc, it.rect.left + it.rect.width), -Infinity);
-                    const totalWidths = items.reduce((acc: number, it: any) => acc + it.rect.width, 0);
+                    const maxRight = items.reduce(
+                        (acc: number, it: any) => Math.max(acc, it.rect.left + it.rect.width),
+                        -Infinity
+                    );
+                    const totalWidths = items.reduce(
+                        (acc: number, it: any) => acc + it.rect.width,
+                        0
+                    );
                     const gap = n > 1 ? (maxRight - minLeft - totalWidths) / (n - 1) : 0;
                     let cursor = minLeft;
                     items.forEach((it: any) => {
@@ -3800,8 +3821,14 @@
                     // vertical even
                     items.sort((a: any, b: any) => a.rect.top - b.rect.top);
                     const minTop = items[0].rect.top;
-                    const maxBottom = items.reduce((acc: number, it: any) => Math.max(acc, it.rect.top + it.rect.height), -Infinity);
-                    const totalHeights = items.reduce((acc: number, it: any) => acc + it.rect.height, 0);
+                    const maxBottom = items.reduce(
+                        (acc: number, it: any) => Math.max(acc, it.rect.top + it.rect.height),
+                        -Infinity
+                    );
+                    const totalHeights = items.reduce(
+                        (acc: number, it: any) => acc + it.rect.height,
+                        0
+                    );
                     const gap = n > 1 ? (maxBottom - minTop - totalHeights) / (n - 1) : 0;
                     let cursor = minTop;
                     items.forEach((it: any) => {
