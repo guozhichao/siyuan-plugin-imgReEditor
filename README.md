@@ -15,7 +15,6 @@ Edit images in SiYuan Note, supporting:
 -   Crop and flip images, add text, add rectangles/ellipses, add arrows, add numbered sequences, brush tools, and other functions.
 -   Saved PNG images support re-editing of modifications and annotations added by the plugin.
 
-![](preview.png)
 
 ## Settings
 
