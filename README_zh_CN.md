@@ -39,11 +39,11 @@
 
 ![](https://fastly.jsdelivr.net/gh/Achuan-2/PicBed/assets/20251219185953-2025-12-19.png)
 
-插件支持快速添加图片边框，把图改为精致的博客风格，如果你想要创建这样的图
+插件支持快速添加图片边框，把图改为精致的博客风格，如果你想要给笔记里的截图添加圆角+边框效果，过去要使用专门的软件才能做到
 
 ![](https://fastly.jsdelivr.net/gh/Achuan-2/PicBed/assets/20251219190004-2025-12-19.png)
 
-现在只需要一键就可以创建了，让思源可以成为你的图文写作神器！
+现在只需要在思源笔记里点击一下就可以创建这样的图了！
 
 ![](https://fastly.jsdelivr.net/gh/Achuan-2/PicBed/assets/PixPin_2025-12-19_16-20-19-2025-12-19.gif)
 
