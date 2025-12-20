@@ -439,7 +439,8 @@
                 try {
                     const expectedBackupName = `${originalFileName}.json`;
                     const candidates: string[] = [];
-                    if (editorData && editorData.backupFileName) candidates.push(editorData.backupFileName);
+                    if (editorData && editorData.backupFileName)
+                        candidates.push(editorData.backupFileName);
                     candidates.push(expectedBackupName);
 
                     let loadedText: string | null = null;
@@ -477,7 +478,9 @@
                                         ...saved,
                                         backupFileName: expectedBackupName,
                                     };
-                                    const jsonBlob = new Blob([JSON.stringify(jsonObj)], { type: 'application/json' });
+                                    const jsonBlob = new Blob([JSON.stringify(jsonObj)], {
+                                        type: 'application/json',
+                                    });
                                     await putFile(syncPath, false, jsonBlob);
                                 } catch (e) {
                                     console.warn('Failed to sync backup json to expected name', e);
