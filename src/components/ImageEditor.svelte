@@ -388,6 +388,7 @@
 
             if (imagePath.startsWith('data:')) {
                 lastBlobURL = imagePath;
+                imageBlob = dataURLToBlob(imagePath);
                 originalFileName = `screenshot-${Date.now()}.png`;
                 originalExt = 'png';
                 editorReady = true;
@@ -554,7 +555,7 @@
     }
 
     async function handleSave() {
-        if (!isCanvasMode && !imageBlob) return;
+        if (!isCanvasMode && !imageBlob && !isScreenshotMode) return;
         if (!editorReady) {
             pushErrMsg('编辑器尚未准备好，请稍后重试');
             return;
@@ -573,7 +574,6 @@
                     ) {
                         (canvasEditorRef as any).resetDirty();
                     }
-                    onClose?.(true, result.path);
                 }
                 return;
             }
