@@ -234,11 +234,25 @@ export class ScreenshotManager {
                         .multi-select-mode .screenshot-item .delete-btn {
                             display: none !important;
                         }
+                        .screenshot-history-container {
+                            position: relative;
+                            user-select: none;
+                        }
+                        .selection-marquee {
+                            position: absolute;
+                            border: 1px solid var(--b3-theme-primary);
+                            background: rgba(var(--b3-theme-primary-rgb, 66, 133, 244), 0.2);
+                            pointer-events: none;
+                            z-index: 100;
+                        }
                     </style>
                     <div class="screenshot-history-toolbar">
                         <span style="margin-right: auto; line-height: 28px; font-weight: bold; font-size: 14px;">排序与管理：</span>
-                        <button class="b3-button b3-button--outline ${multiSelectMode ? 'b3-button--primary' : ''}" id="toggle-multi-select">多选模式</button>
-                        ${multiSelectMode ? '<button class="b3-button b3-button--outline b3-button--error" id="delete-selected" disabled>删除选中</button>' : ''}
+                        <button class="b3-button ${multiSelectMode ? '' : 'b3-button--outline'}" id="toggle-multi-select">多选模式</button>
+                        ${multiSelectMode ? `
+                            <button class="b3-button b3-button--outline" id="select-all">全选</button>
+                            <button class="b3-button b3-button--outline b3-button--error" id="delete-selected" disabled>删除选中</button>
+                        ` : ''}
                         <button class="b3-button ${sortType === 'updated' ? '' : 'b3-button--outline'}" data-sort="updated">按更新时间</button>
                         <button class="b3-button ${sortType === 'created' ? '' : 'b3-button--outline'}" data-sort="created">按创建时间</button>
                     </div>
@@ -281,6 +295,7 @@ export class ScreenshotManager {
                 width: '900px'
             });
 
+            let lastSelectedIndex = -1;
             const bindEvents = () => {
                 // Multi-select toggle
                 const toggleBtn = dialog.element.querySelector('#toggle-multi-select');
@@ -288,10 +303,46 @@ export class ScreenshotManager {
                     toggleBtn.addEventListener('click', () => {
                         multiSelectMode = !multiSelectMode;
                         selectedFiles = [];
+                        lastSelectedIndex = -1;
                         const wrapper = dialog.element.querySelector('#screenshot-history-wrapper');
                         if (wrapper) {
                             wrapper.innerHTML = renderHistory(currentSort);
                             bindEvents();
+                        }
+                    });
+                }
+
+                // Select all
+                const selectAllBtn = dialog.element.querySelector('#select-all');
+                if (selectAllBtn) {
+                    selectAllBtn.addEventListener('click', () => {
+                        const items = Array.from(dialog.element.querySelectorAll('.screenshot-item'));
+                        const allPaths = items.map(item => item.getAttribute('data-path') || '');
+                        const allSelected = allPaths.length > 0 && allPaths.every(p => selectedFiles.includes(p));
+
+                        if (allSelected) {
+                            // Deselect all
+                            selectedFiles = [];
+                            items.forEach(item => {
+                                item.classList.remove('selected');
+                                const cb = item.querySelector('.checkbox') as HTMLInputElement;
+                                if (cb) cb.checked = false;
+                            });
+                        } else {
+                            // Select all
+                            selectedFiles = [...allPaths];
+                            items.forEach(item => {
+                                item.classList.add('selected');
+                                const cb = item.querySelector('.checkbox') as HTMLInputElement;
+                                if (cb) cb.checked = true;
+                            });
+                        }
+
+                        // Update delete button state
+                        const deleteSelectedBtn = dialog.element.querySelector('#delete-selected') as HTMLButtonElement;
+                        if (deleteSelectedBtn) {
+                            deleteSelectedBtn.disabled = selectedFiles.length === 0;
+                            deleteSelectedBtn.innerText = `删除选中 (${selectedFiles.length})`;
                         }
                     });
                 }
@@ -312,6 +363,8 @@ export class ScreenshotManager {
                             }
                             pushMsg(`已删除 ${selectedFiles.length} 张图片`);
                             files = await readDir(path); // refreshing
+                            selectedFiles = [];
+                            lastSelectedIndex = -1;
                             const wrapper = dialog.element.querySelector('#screenshot-history-wrapper');
                             if (wrapper) {
                                 wrapper.innerHTML = renderHistory(currentSort);
@@ -322,11 +375,12 @@ export class ScreenshotManager {
                 }
 
                 // Add event listeners to items
-                dialog.element.querySelectorAll('.screenshot-item').forEach(item => {
+                const items = Array.from(dialog.element.querySelectorAll('.screenshot-item'));
+                items.forEach((item, index) => {
                     const filePath = item.getAttribute('data-path') || '';
                     const checkbox = item.querySelector('.checkbox') as HTMLInputElement;
 
-                    item.addEventListener('click', (e) => {
+                    item.addEventListener('click', (e: MouseEvent) => {
                         const isDeleteBtn = (e.target as HTMLElement).closest('.delete-btn');
                         if (isDeleteBtn) {
                             e.stopPropagation();
@@ -338,6 +392,8 @@ export class ScreenshotManager {
                                 } catch (e) { }
                                 pushMsg('图片已删除');
                                 files = await readDir(path);
+                                selectedFiles = selectedFiles.filter(f => f !== filePath);
+                                lastSelectedIndex = -1;
                                 const wrapper = dialog.element.querySelector('#screenshot-history-wrapper');
                                 if (wrapper) {
                                     wrapper.innerHTML = renderHistory(currentSort);
@@ -348,9 +404,24 @@ export class ScreenshotManager {
                         }
 
                         if (multiSelectMode) {
-                            if (checkbox) {
-                                checkbox.checked = !checkbox.checked;
-                                updateSelection(filePath, checkbox.checked, item);
+                            if (e.shiftKey && lastSelectedIndex !== -1) {
+                                const start = Math.min(lastSelectedIndex, index);
+                                const end = Math.max(lastSelectedIndex, index);
+                                for (let i = start; i <= end; i++) {
+                                    const targetItem = items[i];
+                                    const targetPath = targetItem.getAttribute('data-path') || '';
+                                    const targetCheckbox = targetItem.querySelector('.checkbox') as HTMLInputElement;
+                                    if (targetCheckbox) {
+                                        targetCheckbox.checked = true;
+                                        updateSelection(targetPath, true, targetItem);
+                                    }
+                                }
+                            } else {
+                                if (checkbox) {
+                                    checkbox.checked = !checkbox.checked;
+                                    updateSelection(filePath, checkbox.checked, item);
+                                }
+                                lastSelectedIndex = index;
                             }
                         } else {
                             if (filePath) {
@@ -365,12 +436,109 @@ export class ScreenshotManager {
                     });
 
                     if (checkbox) {
-                        checkbox.addEventListener('click', (e) => {
+                        checkbox.addEventListener('click', (e: MouseEvent) => {
                             e.stopPropagation();
-                            updateSelection(filePath, checkbox.checked, item);
+                            if (e.shiftKey && lastSelectedIndex !== -1) {
+                                const start = Math.min(lastSelectedIndex, index);
+                                const end = Math.max(lastSelectedIndex, index);
+                                for (let i = start; i <= end; i++) {
+                                    const targetItem = items[i];
+                                    const targetPath = targetItem.getAttribute('data-path') || '';
+                                    const targetCheckbox = targetItem.querySelector('.checkbox') as HTMLInputElement;
+                                    if (targetCheckbox) {
+                                        targetCheckbox.checked = true;
+                                        updateSelection(targetPath, true, targetItem);
+                                    }
+                                }
+                            } else {
+                                updateSelection(filePath, checkbox.checked, item);
+                                lastSelectedIndex = index;
+                            }
                         });
                     }
                 });
+
+                // Right-click marquee selection
+                let isRightDragging = false;
+                let startX = 0;
+                let startY = 0;
+                let marquee: HTMLDivElement | null = null;
+                const container = dialog.element.querySelector('.screenshot-history-container') as HTMLElement;
+
+                if (container) {
+                    const onMouseMove = (e: MouseEvent) => {
+                        if (!isRightDragging) return;
+
+                        if (!marquee) {
+                            marquee = document.createElement('div');
+                            marquee.className = 'selection-marquee';
+                            container.appendChild(marquee);
+                        }
+
+                        const rect = container.getBoundingClientRect();
+                        const currentX = e.clientX - rect.left + container.scrollLeft;
+                        const currentY = e.clientY - rect.top + container.scrollTop;
+
+                        const left = Math.min(startX, currentX);
+                        const top = Math.min(startY, currentY);
+                        const width = Math.abs(startX - currentX);
+                        const height = Math.abs(startY - currentY);
+
+                        marquee.style.left = left + 'px';
+                        marquee.style.top = top + 'px';
+                        marquee.style.width = width + 'px';
+                        marquee.style.height = height + 'px';
+
+                        const marqueeRect = marquee.getBoundingClientRect();
+                        items.forEach(item => {
+                            const itemRect = item.getBoundingClientRect();
+                            const isIntersect = !(itemRect.right < marqueeRect.left ||
+                                itemRect.left > marqueeRect.right ||
+                                itemRect.bottom < marqueeRect.top ||
+                                itemRect.top > marqueeRect.bottom);
+
+                            if (isIntersect) {
+                                const checkbox = item.querySelector('.checkbox') as HTMLInputElement;
+                                const filePath = item.getAttribute('data-path') || '';
+                                if (checkbox && !checkbox.checked) {
+                                    checkbox.checked = true;
+                                    updateSelection(filePath, true, item);
+                                }
+                            }
+                        });
+                    };
+
+                    const onMouseUp = () => {
+                        if (isRightDragging) {
+                            isRightDragging = false;
+                            if (marquee) {
+                                marquee.remove();
+                                marquee = null;
+                            }
+                            window.removeEventListener('mousemove', onMouseMove);
+                            window.removeEventListener('mouseup', onMouseUp);
+                        }
+                    };
+
+                    container.addEventListener('mousedown', (e: MouseEvent) => {
+                        if (!multiSelectMode || e.button !== 2) return;
+
+                        const rect = container.getBoundingClientRect();
+                        startX = e.clientX - rect.left + container.scrollLeft;
+                        startY = e.clientY - rect.top + container.scrollTop;
+
+                        isRightDragging = true;
+
+                        window.addEventListener('mousemove', onMouseMove);
+                        window.addEventListener('mouseup', onMouseUp);
+
+                        const handleContextMenu = (ce: MouseEvent) => {
+                            ce.preventDefault();
+                            window.removeEventListener('contextmenu', handleContextMenu);
+                        };
+                        window.addEventListener('contextmenu', handleContextMenu);
+                    });
+                }
 
                 function updateSelection(filePath: string, selected: boolean, item: Element) {
                     if (selected) {
@@ -392,6 +560,7 @@ export class ScreenshotManager {
                         const sort = btn.getAttribute('data-sort') as 'updated' | 'created';
                         if (sort !== currentSort) {
                             currentSort = sort;
+                            lastSelectedIndex = -1;
                             const wrapper = dialog.element.querySelector('#screenshot-history-wrapper');
                             if (wrapper) {
                                 wrapper.innerHTML = renderHistory(currentSort);
