@@ -1,9 +1,9 @@
 import {
     Plugin,
     Dialog,
+    Menu,
     confirm
 } from "siyuan";
-
 import "@/index.scss";
 
 import SettingPanel from "./Settings.svelte";
@@ -20,12 +20,26 @@ export default class PluginSample extends Plugin {
     _openMenuImageHandler: any;
     settings: any;
     screenshotManager: ScreenshotManager;
+    private topBarElement: HTMLElement;
 
 
     async onload() {
         // 插件被启用时会自动调用这个函数
         // 设置i18n插件实例
         setPluginInstance(this);
+
+                // 注册自定义图标：iconScreenshot 与 iconImgReEditor
+                this.addIcons(`
+    <symbol id="iconScreenshot" viewBox="0 0 1024 1024">
+        <rect x="112" y="176" width="800" height="672" rx="48" ry="48" fill="none" stroke="currentColor" stroke-width="64"></rect>
+        <path d="M336 352h352v320H336z" fill="currentColor" opacity="0.95"></path>
+        <circle cx="512" cy="512" r="56" opacity="0.12"></circle>
+    </symbol>
+
+        <symbol id="iconImgReEditor" viewBox="0 0 1024 1024">
+        <path d="M430.933333 610.133333l115.2-145.066666 72.533334 98.133333c34.133333-21.333333 68.266667-34.133333 106.666666-34.133333 8.533333 0 21.333333 0 34.133334 4.266666v-298.666666C755.2 200.533333 725.333333 170.666667 691.2 170.666667H234.666667C200.533333 170.666667 170.666667 200.533333 170.666667 234.666667v456.533333c0 34.133333 29.866667 64 64 64h294.4c-4.266667-8.533333-4.266667-21.333333-4.266667-34.133333 0-21.333333 4.266667-46.933333 12.8-64H234.666667L349.866667 512l81.066666 98.133333zM593.066667 793.6V853.333333h55.466666l153.6-153.6-59.733333-59.733333zM849.066667 631.466667L810.666667 597.333333c-8.533333-8.533333-17.066667-8.533333-21.333334 0l-29.866666 29.866667 59.733333 59.733333 29.866667-29.866666c4.266667-8.533333 4.266667-17.066667 0-25.6z" p-id="8019"></path>
+        </symbol>
+                `);
 
         // 加载设置
         this.settings = await this.loadSettings();
@@ -49,6 +63,47 @@ export default class PluginSample extends Plugin {
         // 初始化截图管理器
         this.screenshotManager = new ScreenshotManager(this);
         await this.screenshotManager.registerShortcut();
+
+        // 注册顶栏按钮（使用 Menu 类创建下拉菜单）
+        this.topBarElement = this.addTopBar({
+            icon: 'iconImgReEditor',
+            title: 'ImgReEditor',
+            position: 'right',
+            callback: (event) => {
+                // 使用 Menu API 创建独立菜单实例
+                const menu = new Menu('imgreeditor-topbar', () => {
+                    // 菜单关闭时的回调（可选）
+                });
+
+                menu.addItem({
+                    icon: 'iconScreenshot',
+                    label: '截图',
+                    click: async () => {
+                        const result = await this.screenshotManager.captureWithSelection();
+                        if (result) {
+                            this.openImageEditorDialog(result.dataURL, null, false, true, null, result.rect);
+                        }
+                        menu.close && menu.close();
+                    }
+                });
+
+                menu.addItem({
+                    icon: 'iconHistory',
+                    label: '浏览历史截图',
+                    click: () => {
+                        this.screenshotManager.showHistoryDialog((filePath) => {
+                            this.openImageEditorDialog(filePath, null, false, true);
+                        });
+                        menu.close && menu.close();
+                    }
+                });
+
+                // 打开菜单，使用事件位置作为坐标（兼容对象或参数形式）
+                const x = (event && (event.clientX ?? event.x)) || 0;
+                const y = (event && (event.clientY ?? event.y)) || 0;
+                menu.open({ x, y });
+            }
+        });
     }
 
     async onLayoutReady() {
@@ -62,6 +117,10 @@ export default class PluginSample extends Plugin {
             if (this._openMenuImageHandler) {
                 this.eventBus.off('open-menu-image', this._openMenuImageHandler);
                 this._openMenuImageHandler = null;
+            }
+            if (this.topBarElement) {
+                this.topBarElement.remove();
+                this.topBarElement = null;
             }
         } catch (e) {
             console.warn('Error while removing event listeners during unload', e);
