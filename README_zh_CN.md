@@ -77,9 +77,9 @@
 ## 博客
 
 - 文章
-  - [思源笔记插件 ImgReEditor：让思源笔记成为你的图文笔记神器](https://zhuanlan.zhihu.com/p/1985459256305152111)
+  - [思源笔记插件 ImgReEditor：图片编辑保存还可再编辑，让思源笔记成为你的图文笔记神器](https://zhuanlan.zhihu.com/p/1985459256305152111)
 - 视频
-  - [思源笔记插件 ImgReEditor ：编辑保存的图片还可再编辑，让思源笔记成为你的图文笔记神器](https://www.bilibili.com/video/BV11wBFBvEn8/?vd_source=b4a1fcb6dce305e26d8d16d9cbb71304#reply285851298256)
+  - [思源笔记插件 ImgReEditor：图片编辑保存还可再编辑，让思源笔记成为你的图文笔记神器](https://www.bilibili.com/video/BV11wBFBvEn8/?vd_source=b4a1fcb6dce305e26d8d16d9cbb71304#reply285851298256)
 
 ## 📄 许可证
 
