@@ -2356,8 +2356,9 @@
 
         const originalSrc = active._originalSrc;
         const cropOffset = active._cropOffset || { x: 0, y: 0 };
-        const currentScaleX = active.scaleX;
-        const currentScaleY = active.scaleY;
+
+        // Get current visual bounds of the image (before we modify it)
+        const currentBounds = active.getBoundingRect();
 
         // Backup current state for cancellation/application
         imageCropBackup = {
@@ -2368,6 +2369,8 @@
             scaleX: active.scaleX,
             scaleY: active.scaleY,
             angle: active.angle,
+            originX: active.originX,
+            originY: active.originY,
             element: active._element,
             cropOffset: { ...cropOffset },
         };
@@ -2377,26 +2380,50 @@
         imgEl.onload = () => {
             if (!canvas || !targetImageToCrop) return;
 
-            // To make cropping easy, we temporarily set angle to 0.
-            // When applying or cancelling, we will restore the rotation.
-            // We calculate where the original top-left (0,0) would be at angle 0.
-            const origLeft = targetImageToCrop.left - cropOffset.x * currentScaleX;
-            const origTop = targetImageToCrop.top - cropOffset.y * currentScaleY;
+            // Calculate the scale factors from the current cropped image
+            const currentScaleX = imageCropBackup.scaleX;
+            const currentScaleY = imageCropBackup.scaleY;
 
-            // Temporarily show full image at angle 0
+            // The original image's top-left corner position (at angle 0)
+            // We need to account for the crop offset to find where the original image would be
+            // Current image position represents: original position + cropOffset * scale
+            // So: original position = current position - cropOffset * scale
+
+            // First, we need to handle the origin. Convert current position to top-left origin
+            let currentLeft = imageCropBackup.left;
+            let currentTop = imageCropBackup.top;
+
+            // If origin is center, convert to top-left
+            if (imageCropBackup.originX === 'center') {
+                currentLeft -= (imageCropBackup.width * currentScaleX) / 2;
+            }
+            if (imageCropBackup.originY === 'center') {
+                currentTop -= (imageCropBackup.height * currentScaleY) / 2;
+            }
+
+            // Now calculate where the original full image's top-left would be
+            const origLeft = currentLeft - cropOffset.x * currentScaleX;
+            const origTop = currentTop - cropOffset.y * currentScaleY;
+
+            // Set the image to show the full original at angle 0, with top-left origin
             targetImageToCrop.set({
                 angle: 0,
                 left: origLeft,
                 top: origTop,
+                originX: 'left',
+                originY: 'top',
                 width: imgEl.naturalWidth,
                 height: imgEl.naturalHeight,
-                // scaled correctly
+                scaleX: currentScaleX,
+                scaleY: currentScaleY,
             });
             targetImageToCrop.setElement(imgEl);
+            targetImageToCrop.setCoords();
 
-            // Create CropRect at the previous visual bounds (now at angle 0)
-            const visualLeft = targetImageToCrop.left + cropOffset.x * currentScaleX;
-            const visualTop = targetImageToCrop.top + cropOffset.y * currentScaleY;
+            // Create CropRect at the current visible area
+            // The visible area is at: original position + cropOffset * scale
+            const visualLeft = origLeft + cropOffset.x * currentScaleX;
+            const visualTop = origTop + cropOffset.y * currentScaleY;
             const visualWidth = imageCropBackup.width * currentScaleX;
             const visualHeight = imageCropBackup.height * currentScaleY;
 
@@ -2415,6 +2442,8 @@
                 lockRotation: true,
                 hasControls: true,
                 hasBorders: true,
+                scaleX: 1,
+                scaleY: 1,
             });
 
             const cropControls = createCropControls(
@@ -2465,9 +2494,21 @@
             // Since targetImageToCrop is currently the full original at angle 0
             const currentScaleX = targetImageToCrop.scaleX;
             const currentScaleY = targetImageToCrop.scaleY;
-            const newOffset = {
+
+            // Get the previous crop offset (relative to original image)
+            const previousOffset = (targetImageToCrop as any)._cropOffset || { x: 0, y: 0 };
+
+            // Calculate the new offset relative to the current full image display
+            const relativeOffset = {
                 x: (left - targetImageToCrop.left) / currentScaleX,
                 y: (top - targetImageToCrop.top) / currentScaleY,
+            };
+
+            // The new offset should be the sum of previous offset and the new relative offset
+            // This ensures the offset is always relative to the ORIGINAL image, not the cropped one
+            const newOffset = {
+                x: previousOffset.x + relativeOffset.x,
+                y: previousOffset.y + relativeOffset.y,
             };
 
             // 2. Create baked image
@@ -2493,32 +2534,50 @@
             (newImg as any)._cropOffset = newOffset;
 
             // 4. Restore rotation and position
-            // We use the center of the crop rect and rotate it around the original image's center as it was.
-            const cropCenter = {
-                x: left + width / 2,
-                y: top + height / 2,
-            };
+            // The new cropped image should be positioned where the crop rect was
+            // We need to restore the original origin settings
 
-            // Original center (pivot):
-            const origL = targetImageToCrop.left;
-            const origT = targetImageToCrop.top;
-            const origW = targetImageToCrop.width * currentScaleX;
-            const origH = targetImageToCrop.height * currentScaleY;
-            const pivot = { x: origL + origW / 2, y: origT + origH / 2 };
+            // Calculate the position based on the original origin
+            let newLeft = left;
+            let newTop = top;
 
-            const angleRad = (imageCropBackup.angle * Math.PI) / 180;
-            const rotatedCenter = util.rotatePoint(
-                new Point(cropCenter.x, cropCenter.y),
-                new Point(pivot.x, pivot.y),
-                angleRad
-            );
+            // The crop rect is at top-left origin, but we need to convert to the original origin
+            if (imageCropBackup.originX === 'center') {
+                newLeft = left + width / 2;
+            }
+            if (imageCropBackup.originY === 'center') {
+                newTop = top + height / 2;
+            }
+
+            // If there was rotation, we need to rotate the position around the original pivot
+            if (imageCropBackup.angle !== 0) {
+                // The pivot point is the center of the original full image
+                const origL = targetImageToCrop.left;
+                const origT = targetImageToCrop.top;
+                const origW = targetImageToCrop.width * currentScaleX;
+                const origH = targetImageToCrop.height * currentScaleY;
+                const pivot = { x: origL + origW / 2, y: origT + origH / 2 };
+
+                // Rotate the new position around the pivot
+                const angleRad = (imageCropBackup.angle * Math.PI) / 180;
+                const rotatedPos = util.rotatePoint(
+                    new Point(newLeft, newTop),
+                    new Point(pivot.x, pivot.y),
+                    angleRad
+                );
+
+                newLeft = rotatedPos.x;
+                newTop = rotatedPos.y;
+            }
 
             newImg.set({
-                originX: 'center',
-                originY: 'center',
-                left: rotatedCenter.x,
-                top: rotatedCenter.y,
+                originX: imageCropBackup.originX || 'left',
+                originY: imageCropBackup.originY || 'top',
+                left: newLeft,
+                top: newTop,
                 angle: imageCropBackup.angle,
+                scaleX: 1,
+                scaleY: 1,
             });
             newImg.setCoords();
 
@@ -2554,6 +2613,8 @@
                 scaleX: imageCropBackup.scaleX,
                 scaleY: imageCropBackup.scaleY,
                 angle: imageCropBackup.angle,
+                originX: imageCropBackup.originX,
+                originY: imageCropBackup.originY,
             });
             targetImageToCrop.setElement(imageCropBackup.element);
             targetImageToCrop.setCoords();
