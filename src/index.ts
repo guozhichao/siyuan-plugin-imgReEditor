@@ -1,6 +1,7 @@
 import {
     Plugin,
     Dialog,
+    confirm
 } from "siyuan";
 
 import "@/index.scss";
@@ -33,7 +34,7 @@ export default class PluginSample extends Plugin {
 
         // 注册斜杠菜单
         this.protyleSlash = [{
-            filter: ["canvas", "huabu", "画布", "imgreeditor","图片"],
+            filter: ["canvas", "huabu", "画布", "imgreeditor", "图片"],
             id: "imgreeditor-canvas",
             html: `<div class="b3-list-item__first"><svg class="b3-list-item__graphic"><use xlink:href="#iconImage"></use></svg><span class="b3-list-item__text">${t("imageEditor.createCanvas") || '创建画布 (ImgReEditor)'}</span></div>`,
             callback: async (protyle: any, nodeElement: HTMLElement) => {
@@ -163,14 +164,35 @@ export default class PluginSample extends Plugin {
                 settings: this.settings,
                 isCanvasMode,
                 onClose: (saved: boolean, newPath?: string) => {
+                    // Bypass dirty check on explicit save/cancel
+                    (dialog as any)._skipDirtyCheck = true;
                     dialog.destroy();
-                    comp.$destroy();
                     if (saved && newPath && onSaveCallback) {
                         onSaveCallback(newPath);
                     }
                 }
             }
         });
+
+        // Intercept dialog destruction (e.g. clicking "X" or Esc)
+        const originalDestroy = dialog.destroy.bind(dialog);
+        dialog.destroy = () => {
+            if (!(dialog as any)._skipDirtyCheck && comp && typeof (comp as any).isDirty === 'function' && (comp as any).isDirty()) {
+                confirm(t('imageEditor.confirm'), t('imageEditor.unsavedChanges'), () => {
+                    (dialog as any)._skipDirtyCheck = true;
+                    try {
+                        comp.$destroy();
+                    } catch (e) { }
+                    originalDestroy();
+                });
+                return;
+            }
+            try {
+                comp.$destroy();
+            } catch (e) { }
+            originalDestroy();
+        };
+
         comp.$on('saveSettings', (e) => {
             this.settings = e.detail;
             this.saveSettings(this.settings);

@@ -44,6 +44,10 @@
     let currentNumber = 1;
     // crop/resize states
 
+    export function isDirty() {
+        return historyIndex > 0;
+    }
+
     let container: HTMLCanvasElement;
     let canvas: Canvas | null = null;
     const dispatch = createEventDispatcher();
@@ -606,7 +610,6 @@
                 if (
                     activeTool === 'shape' ||
                     activeTool === 'arrow' ||
-                    activeTool === 'text' ||
                     activeTool === 'number-marker' ||
                     activeTool === 'mosaic'
                 ) {
@@ -629,9 +632,7 @@
                     activeTool === 'mosaic'
                 ) {
                     canvas.defaultCursor = 'crosshair';
-                } else if (activeTool === 'text') {
-                    canvas.defaultCursor = 'text';
-                }
+                } 
             }
         };
         document.addEventListener('keydown', onDocKeyDown as any);
@@ -644,16 +645,7 @@
 
             // Handle text editing exit with Escape or Ctrl/Cmd
             // This is placed before the input/textarea check as Fabric's host textarea will be focused
-            const activeObj = canvas?.getActiveObject();
-            const isEditingText = activeObj && (activeObj as any).isEditing;
-            if (isEditingText && (e.key === 'Escape' || e.key === 'Control' || e.key === 'Meta')) {
-                (activeObj as any).exitEditing();
-                setTool(null);
-                canvas?.requestRenderAll();
-                e.preventDefault();
-                e.stopPropagation();
-                return;
-            }
+
 
             // ignore when typing in input or textarea
             if (
@@ -4012,18 +4004,16 @@
     async function onWindowPaste(e: ClipboardEvent) {
         if (!canvas) return;
 
-        // Stop propagation to prevent Siyuan from receiving the paste event
-        e.stopPropagation();
-        e.preventDefault();
-
-        // Check if we are in an input or textarea
+        // If the paste target is an input/textarea/contenteditable, allow default handling
         const el = e.target as HTMLElement | null;
-        if (
-            el &&
-            (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || (el as any).isContentEditable)
-        ) {
+        if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || (el as any).isContentEditable)) {
             return;
         }
+
+        // Stop propagation to prevent Siyuan from receiving the paste event
+        // and prevent default browser handling since we'll handle it for the canvas
+        e.stopPropagation();
+        e.preventDefault();
 
         const items = e.clipboardData?.items;
         if (!items) {

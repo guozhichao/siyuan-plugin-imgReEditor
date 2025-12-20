@@ -1,6 +1,8 @@
 <script lang="ts">
     import { onMount, onDestroy, createEventDispatcher } from 'svelte';
     const dispatch = createEventDispatcher();
+    import { confirm } from 'siyuan';
+    import { t } from '../utils/i18n';
     import CanvasEditor from './editor/CanvasEditor.svelte';
     import Toolbar from './editor/Toolbar.svelte';
     import ToolSettings from './editor/ToolSettings.svelte';
@@ -56,6 +58,27 @@
     let originalImageDimensions = { width: 0, height: 0 };
     let cropData: { left: number; top: number; width: number; height: number } | null = null;
     let isCropped = false;
+
+    export function isDirty() {
+        return (
+            canvasEditorRef &&
+            typeof canvasEditorRef.isDirty === 'function' &&
+            canvasEditorRef.isDirty()
+        );
+    }
+
+    async function handleCancel() {
+        if (isDirty()) {
+            return new Promise<void>(resolve => {
+                confirm(t('imageEditor.confirm'), t('imageEditor.unsavedChanges'), () => {
+                    onClose?.(false);
+                    resolve();
+                });
+            });
+        } else {
+            onClose?.(false);
+        }
+    }
 
     function saveToolSettings(tool: string | null, options: any) {
         if (!tool || !options) return;
@@ -621,7 +644,7 @@
             }
         }}
         on:save={() => handleSave()}
-        on:cancel={() => onClose?.(false)}
+        on:cancel={() => handleCancel()}
     />
 
     <div class="editor-main">

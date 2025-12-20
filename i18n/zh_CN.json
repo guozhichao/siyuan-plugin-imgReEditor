@@ -24,6 +24,8 @@
         "editImage": "编辑图片",
         "createCanvas": "创建画布 (ImgReEditor)",
         "saveSuccess": "图片已保存",
-        "saveFailed": "保存失败"
+        "saveFailed": "保存失败",
+        "unsavedChanges": "图片内容已修改但未保存，确定要关闭吗？",
+        "confirm": "确定"
     }
 }

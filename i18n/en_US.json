@@ -25,6 +25,8 @@
         "editImage": "Edit image",
         "createCanvas": "Create canvas (ImgReEditor)",
         "saveSuccess": "Image saved",
-        "saveFailed": "Save failed"
+        "saveFailed": "Save failed",
+        "unsavedChanges": "The image has unsaved changes. Are you sure you want to close?",
+        "confirm": "Confirm"
     }
 }
