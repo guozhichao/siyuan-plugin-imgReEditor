@@ -59,6 +59,7 @@
     const STORAGE_BACKUP_DIR = 'data/storage/petal/siyuan-plugin-imgReEditor/backup';
     const SCREENSHOT_HISTORY_DIR =
         'data/storage/petal/siyuan-plugin-imgReEditor/screenshot_history';
+    let lastSavedHistoryIndex: number = -1;
 
     // Custom crop state (CanvasEditor handles crop lifecycle; ImageEditor stores metadata)
     let originalImageDimensions = { width: 0, height: 0 };
@@ -66,11 +67,20 @@
     let isCropped = false;
 
     export function isDirty() {
-        return (
-            canvasEditorRef &&
-            typeof canvasEditorRef.isDirty === 'function' &&
-            canvasEditorRef.isDirty()
-        );
+        if (!canvasEditorRef || typeof canvasEditorRef.getHistoryIndex !== 'function') return false;
+
+        const currentIndex = canvasEditorRef.getHistoryIndex();
+
+        if (isScreenshotMode) {
+            // Already saved/copied? Check if there are NEW changes since then.
+            if (lastSavedHistoryIndex !== -1) {
+                return currentIndex > lastSavedHistoryIndex;
+            }
+            // Not saved yet? Standard dirty check.
+            return currentIndex > 0;
+        }
+
+        return currentIndex > 0;
     }
 
     async function handleCancel() {
@@ -191,6 +201,9 @@
         // remember history path and asset name
         screenshotHistoryPath = path;
         screenshotAssetName = filename;
+        if (canvasEditorRef && typeof canvasEditorRef.getHistoryIndex === 'function') {
+            lastSavedHistoryIndex = canvasEditorRef.getHistoryIndex();
+        }
 
         return { path, blob: newBlob, dataURL };
     }

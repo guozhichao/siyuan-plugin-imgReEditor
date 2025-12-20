@@ -48,6 +48,10 @@
         return historyIndex > 0;
     }
 
+    export function getHistoryIndex() {
+        return historyIndex;
+    }
+
     let container: HTMLCanvasElement;
     let canvas: Canvas | null = null;
     const dispatch = createEventDispatcher();
