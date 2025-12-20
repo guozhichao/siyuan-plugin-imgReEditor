@@ -611,7 +611,8 @@
                     activeTool === 'shape' ||
                     activeTool === 'arrow' ||
                     activeTool === 'number-marker' ||
-                    activeTool === 'mosaic'
+                    activeTool === 'mosaic' ||
+                    activeTool === 'text'
                 ) {
                     canvas.defaultCursor = 'default';
                 }
@@ -632,6 +633,8 @@
                     activeTool === 'mosaic'
                 ) {
                     canvas.defaultCursor = 'crosshair';
+                } else if (activeTool === 'text') {
+                    canvas.defaultCursor = 'text';
                 }
             }
         };
@@ -643,8 +646,23 @@
         (onDocKeyShortcuts as any) = (e: KeyboardEvent) => {
             const el = e.target as HTMLElement | null;
 
-            // Handle text editing exit with Escape or Ctrl/Cmd
+            // Handle text editing exit with Escape or Ctrl+Enter
             // This is placed before the input/textarea check as Fabric's host textarea will be focused
+            if (e.key === 'Escape' || (e.key === 'Enter' && (e.ctrlKey || e.metaKey))) {
+                const active = canvas?.getActiveObject();
+                if (
+                    active &&
+                    ['i-text', 'textbox', 'text'].includes(active.type) &&
+                    (active as any).isEditing
+                ) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    (active as any).exitEditing();
+                    setTool(null);
+                    canvas?.requestRenderAll();
+                    return;
+                }
+            }
 
             // ignore when typing in input or textarea
             if (
@@ -976,7 +994,15 @@
 
             // Text tool: create or select an editable text object
             if (activeTool === 'text') {
-                if (opt.e.ctrlKey || opt.e.metaKey) return;
+                if (opt.e.ctrlKey || opt.e.metaKey) {
+                    // Holding Ctrl: if we click an already editing object, exit editing so we can drag it
+                    let hit = opt.target;
+                    if (hit && (hit as any).isEditing) {
+                        (hit as any).exitEditing();
+                        canvas.requestRenderAll();
+                    }
+                    return;
+                }
                 try {
                     // if clicked on an existing text object, select and enter edit mode instead of creating a new one
                     let hit = opt.target;
