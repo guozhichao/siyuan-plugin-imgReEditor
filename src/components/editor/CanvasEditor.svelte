@@ -201,6 +201,44 @@
         return color;
     }
 
+    function applyFill(ctx: CanvasRenderingContext2D, fill: any, tw: number, th: number) {
+        if (typeof fill === 'string' && fill.startsWith('linear-gradient')) {
+            // Very basic parser for linear-gradient(135deg, #color1 0%, #color2 100%)
+            const match = fill.match(
+                /linear-gradient\((\d+)deg,\s*(#[a-fA-F0-9]{3,6})\s+0%,\s*(#[a-fA-F0-9]{3,6})\s+100%\)/i
+            );
+            if (match) {
+                const angle = parseInt(match[1]);
+                const c1 = match[2];
+                const c2 = match[3];
+
+                // Convert angle to radians and adjust to CSS standard (0deg = top, 90deg = right)
+                // CSS linear-gradient angle starts from top (0deg) and goes clockwise.
+                // Canvas createLinearGradient uses (x1, y1) -> (x2, y2).
+                const angleRad = ((angle - 90) * Math.PI) / 180;
+
+                // Calculate size to ensure gradient covers the entire area
+                const length =
+                    Math.abs(tw * Math.cos(angleRad)) + Math.abs(th * Math.sin(angleRad));
+                const halfLen = length / 2;
+                const midX = tw / 2;
+                const midY = th / 2;
+
+                const x1 = midX - Math.cos(angleRad) * halfLen;
+                const y1 = midY - Math.sin(angleRad) * halfLen;
+                const x2 = midX + Math.cos(angleRad) * halfLen;
+                const y2 = midY + Math.sin(angleRad) * halfLen;
+
+                const grad = ctx.createLinearGradient(x1, y1, x2, y2);
+                grad.addColorStop(0, c1);
+                grad.addColorStop(1, c2);
+                ctx.fillStyle = grad;
+                return;
+            }
+        }
+        ctx.fillStyle = fill;
+    }
+
     // history helpers (lifted out so other functions can call)
     function notifyHistoryUpdate() {
         try {
@@ -2804,11 +2842,11 @@
                 ctx.rect(0, 0, tw, th);
             }
             ctx.clip();
-            ctx.fillStyle = fill;
+            applyFill(ctx, fill, tw, th);
             ctx.fillRect(0, 0, tw, th);
             ctx.restore();
         } else {
-            ctx.fillStyle = fill;
+            applyFill(ctx, fill, tw, th);
             ctx.fillRect(0, 0, tw, th);
         }
 
@@ -2823,7 +2861,7 @@
             ctx.shadowBlur = shadowBlur;
             ctx.shadowOffsetX = 0;
             ctx.shadowOffsetY = 0;
-            ctx.fillStyle = fill; // Use background color to avoid color bleeding if image has slight transparency
+            applyFill(ctx, fill, sw, sh); // Use background color to avoid color bleeding if image has slight transparency
 
             ctx.beginPath();
             if (radius > 0 && (ctx as any).roundRect) {

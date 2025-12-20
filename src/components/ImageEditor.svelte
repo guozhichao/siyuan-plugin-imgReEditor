@@ -1468,6 +1468,11 @@
                             // Persist settings for the active tool
                             saveToolSettings(activeTool, toolSettings);
                         }}
+                        savedGradients={settings.savedGradients || []}
+                        on:updateSavedGradients={e => {
+                            settings.savedGradients = e.detail;
+                            dispatch('saveSettings', settings);
+                        }}
                         on:recentUpdate={e => {
                             const { colorKey, colors } = e.detail;
                             if (!settings.recentColors) settings.recentColors = {};

@@ -1,9 +1,11 @@
 <script lang="ts">
     import { createEventDispatcher, onMount } from 'svelte';
     import ColorPicker from './ColorPicker.svelte';
+    import GradientDesigner from './GradientDesigner.svelte';
     export let tool: string | null = null;
     export let settings: any = {};
     export let recentColors: Record<string, string[]> = {};
+    export let savedGradients: string[] = [];
     export let selectCanvasSizeMode: boolean = false;
     const dispatch = createEventDispatcher();
 
@@ -27,6 +29,10 @@
     let showFontDropdown = false;
     let highlightedIndex = -1;
     let fontInputFocused = false;
+    let showGradientDesigner = false;
+
+    $: isGradient =
+        typeof settings.fill === 'string' && settings.fill.startsWith('linear-gradient');
 
     $: filteredFonts =
         (fontSearch || '').trim() === ''
@@ -114,6 +120,19 @@
         if (!shouldAllowPropagation(e)) e.stopPropagation();
     }
 
+    const borderFillPresets = [
+        { label: 'Cloudy Knelson', value: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)' },
+        { label: 'Winter Neva', value: 'linear-gradient(135deg, #a1c4fd 0%, #c2e9fb 100%)' },
+        { label: 'Lady Lips', value: 'linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)' },
+        { label: 'Sunny Morning', value: 'linear-gradient(135deg, #f6d365 0%, #fda085 100%)' },
+        { label: 'Dusty Grass', value: 'linear-gradient(135deg, #d4fc79 0%, #96e6a1 100%)' },
+        { label: 'Low Tide', value: 'linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%)' },
+        { label: 'Royal Purple', value: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' },
+        { label: 'Deep Blue', value: 'linear-gradient(135deg, #e0c3fc 0%, #8ec5fc 100%)' },
+        { label: 'Spiky', value: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)' },
+        { label: 'Gentle Care', value: 'linear-gradient(135deg, #ffc3a0 0%, #ffafbd 100%)' },
+    ];
+
     onMount(async () => {
         // candidate fonts to check (common cross-platform + Chinese fonts)
         const candidates = [
@@ -168,6 +187,8 @@
 
 <div
     class="tool-settings"
+    role="region"
+    aria-label="工具设置"
     on:keydown={handleInsideKey}
     on:keyup={handleInsideKey}
     on:keypress={handleInsideKey}
@@ -510,7 +531,7 @@
         {/if}
     {:else if tool === 'crop'}
         <div class="row">
-            <label>裁剪</label>
+            <span class="label">裁剪</span>
             <div style="display:flex;flex-direction:column;gap:8px;">
                 <div style="display:flex;gap:6px;flex-wrap:wrap;">
                     <button
@@ -577,12 +598,51 @@
             <label for="border-bg-color">背景颜色</label>
             <ColorPicker
                 colorKey="image-border-fill"
-                value={settings.fill || '#f1f5fd'}
+                value={typeof settings.fill === 'string' &&
+                settings.fill.startsWith('linear-gradient')
+                    ? '#ffffff'
+                    : settings.fill || '#f1f5fd'}
                 {recentColors}
                 on:change={e => emitChange({ fill: e.detail })}
                 on:recentUpdate
             />
         </div>
+        <div class="row" style="margin-top: -4px; margin-bottom: 12px;">
+            <div class="presets">
+                {#each borderFillPresets as p}
+                    <button
+                        class="preset-btn"
+                        class:active={settings.fill === p.value}
+                        style="background: {p.value}"
+                        title={p.label}
+                        on:click={() => {
+                            emitChange({ fill: p.value });
+                        }}
+                    />
+                {/each}
+                <button
+                    class="preset-btn custom-btn"
+                    class:active={showGradientDesigner}
+                    title="设计渐变"
+                    on:click={() => (showGradientDesigner = !showGradientDesigner)}
+                >
+                    🎨
+                </button>
+            </div>
+        </div>
+
+        {#if showGradientDesigner}
+            <div class="row designer-row">
+                <GradientDesigner
+                    value={isGradient ? settings.fill : borderFillPresets[0].value}
+                    {recentColors}
+                    {savedGradients}
+                    on:change={e => emitChange({ fill: e.detail })}
+                    on:recentUpdate
+                    on:updateSavedGradients={e => dispatch('updateSavedGradients', e.detail)}
+                />
+            </div>
+        {/if}
         <div class="row">
             <label for="border-margin">边框间距</label>
             <input
@@ -1178,5 +1238,49 @@
     .font-dropdown li.selected {
         background: var(--b3-theme-primary-lightest, #e8f0ff);
         color: var(--b3-theme-primary, #1976d2);
+    }
+
+    /* presets */
+    .presets {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        padding: 6px;
+        background: #fbfbfb;
+        border-radius: 8px;
+        border: 1px solid #f0f0f0;
+        margin-left: 88px;
+        width: 140px;
+    }
+    .preset-btn {
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        padding: 0;
+        border: 2px solid #fff;
+        box-shadow: 0 0 0 1px #eee;
+        transition:
+            transform 0.2s,
+            box-shadow 0.2s;
+        flex-shrink: 0;
+    }
+    .preset-btn:hover {
+        transform: scale(1.15);
+        z-index: 1;
+    }
+    .preset-btn.active {
+        box-shadow: 0 0 0 2px var(--b3-theme-primary, #1976d2);
+    }
+    .preset-btn.custom-btn {
+        background: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+    }
+    .designer-row {
+        margin-bottom: 16px;
+        padding-left: 8px;
+        display: block;
     }
 </style>
