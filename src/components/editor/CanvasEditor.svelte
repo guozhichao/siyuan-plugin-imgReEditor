@@ -4413,39 +4413,91 @@
             // For alignment we generally do not move the reference object (if ref is one of selection)
             const refObj = allowed.length > 1 && !forceCanvas ? allowed[0] : null;
 
-            allowed.forEach((o: any) => {
-                try {
-                    if (o === refObj) return;
-                    const rect = o.getBoundingRect();
-                    let dx = 0;
-                    let dy = 0;
-                    if (type === 'h-left') {
-                        const target = refRect.left;
-                        dx = target - rect.left;
-                    } else if (type === 'h-center') {
-                        const target = refRect.left + refRect.width / 2 - rect.width / 2;
-                        dx = target - rect.left;
-                    } else if (type === 'h-right') {
-                        const target = refRect.left + refRect.width - rect.width;
-                        dx = target - rect.left;
-                    } else if (type === 'v-top') {
-                        const target = refRect.top;
-                        dy = target - rect.top;
-                    } else if (type === 'v-middle') {
-                        const target = refRect.top + refRect.height / 2 - rect.height / 2;
-                        dy = target - rect.top;
-                    } else if (type === 'v-bottom') {
-                        const target = refRect.top + refRect.height - rect.height;
-                        dy = target - rect.top;
-                    }
+            // Special handling for canvas-based center alignment with multiple objects
+            // When aligning multiple objects to canvas center (h-center or v-middle),
+            // treat them as a group and center the group as a whole
+            if (forceCanvas && allowed.length > 1 && (type === 'h-center' || type === 'v-middle')) {
+                // Calculate the overall bounding box of all selected objects
+                let minLeft = Infinity;
+                let minTop = Infinity;
+                let maxRight = -Infinity;
+                let maxBottom = -Infinity;
 
-                    if (dx !== 0 || dy !== 0) {
-                        o.left = (typeof o.left === 'number' ? o.left : 0) + dx;
-                        o.top = (typeof o.top === 'number' ? o.top : 0) + dy;
-                        o.setCoords && o.setCoords();
-                    }
-                } catch (e) {}
-            });
+                allowed.forEach((o: any) => {
+                    try {
+                        const rect = o.getBoundingRect();
+                        minLeft = Math.min(minLeft, rect.left);
+                        minTop = Math.min(minTop, rect.top);
+                        maxRight = Math.max(maxRight, rect.left + rect.width);
+                        maxBottom = Math.max(maxBottom, rect.top + rect.height);
+                    } catch (e) {}
+                });
+
+                const groupWidth = maxRight - minLeft;
+                const groupHeight = maxBottom - minTop;
+
+                // Calculate the offset needed to center the entire group
+                let groupDx = 0;
+                let groupDy = 0;
+
+                if (type === 'h-center') {
+                    const targetCenterX = refRect.left + refRect.width / 2;
+                    const currentCenterX = minLeft + groupWidth / 2;
+                    groupDx = targetCenterX - currentCenterX;
+                }
+
+                if (type === 'v-middle') {
+                    const targetCenterY = refRect.top + refRect.height / 2;
+                    const currentCenterY = minTop + groupHeight / 2;
+                    groupDy = targetCenterY - currentCenterY;
+                }
+
+                // Apply the same offset to all objects to maintain their relative positions
+                allowed.forEach((o: any) => {
+                    try {
+                        if (groupDx !== 0 || groupDy !== 0) {
+                            o.left = (typeof o.left === 'number' ? o.left : 0) + groupDx;
+                            o.top = (typeof o.top === 'number' ? o.top : 0) + groupDy;
+                            o.setCoords && o.setCoords();
+                        }
+                    } catch (e) {}
+                });
+            } else {
+                // Original behavior: align each object individually
+                allowed.forEach((o: any) => {
+                    try {
+                        if (o === refObj) return;
+                        const rect = o.getBoundingRect();
+                        let dx = 0;
+                        let dy = 0;
+                        if (type === 'h-left') {
+                            const target = refRect.left;
+                            dx = target - rect.left;
+                        } else if (type === 'h-center') {
+                            const target = refRect.left + refRect.width / 2 - rect.width / 2;
+                            dx = target - rect.left;
+                        } else if (type === 'h-right') {
+                            const target = refRect.left + refRect.width - rect.width;
+                            dx = target - rect.left;
+                        } else if (type === 'v-top') {
+                            const target = refRect.top;
+                            dy = target - rect.top;
+                        } else if (type === 'v-middle') {
+                            const target = refRect.top + refRect.height / 2 - rect.height / 2;
+                            dy = target - rect.top;
+                        } else if (type === 'v-bottom') {
+                            const target = refRect.top + refRect.height - rect.height;
+                            dy = target - rect.top;
+                        }
+
+                        if (dx !== 0 || dy !== 0) {
+                            o.left = (typeof o.left === 'number' ? o.left : 0) + dx;
+                            o.top = (typeof o.top === 'number' ? o.top : 0) + dy;
+                            o.setCoords && o.setCoords();
+                        }
+                    } catch (e) {}
+                });
+            }
 
             canvas.requestRenderAll();
             schedulePushWithType('modified');
