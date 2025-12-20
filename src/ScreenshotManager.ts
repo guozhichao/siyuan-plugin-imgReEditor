@@ -1,6 +1,8 @@
 import { Plugin } from "siyuan";
-import { pushErrMsg, putFile } from "./api";
-
+import { pushErrMsg, putFile,readDir } from "./api";
+import {
+    Dialog,
+} from "siyuan";
 export class ScreenshotManager {
     private plugin: Plugin;
 
@@ -70,7 +72,6 @@ export class ScreenshotManager {
     // saveToHistory removed: ImageEditor.svelte provides screenshot history handling
 
     public async showHistoryDialog() {
-        const { readDir, Dialog } = await import('./api');
         const path = 'data/storage/petal/siyuan-plugin-imgReEditor/screenshot_history';
 
         try {
@@ -84,14 +85,13 @@ export class ScreenshotManager {
             // Sort by modification time (descending)
             files.sort((a, b) => (b.updated || 0) - (a.updated || 0));
 
-            const { Dialog: SiyuanDialog } = await import('siyuan');
-            const dialog = new SiyuanDialog({
+            const dialog = new Dialog({
                 title: '截图历史',
                 content: `
                     <div class="screenshot-history" style="padding: 16px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; max-height: 60vh; overflow-y: auto;">
                         ${files.map(file => `
                             <div class="screenshot-item" data-path="${path}/${file.name}" style="border: 1px solid var(--b3-border-color); border-radius: 4px; overflow: hidden; display: flex; flex-direction: column; cursor: pointer; transition: transform 0.2s;">
-                                <img src="/api/file/getFile?path=${encodeURIComponent(path + '/' + file.name)}" style="width: 100%; height: 120px; object-fit: cover;" />
+                                <img src="${window.siyuan.config.system.workspaceDir}/${path}/${file.name}" style="width: 100%; height: 120px; object-fit: cover;" />
                                 <div style="padding: 8px; font-size: 12px; text-align: center; background: var(--b3-theme-surface);">
                                     ${file.name}
                                 </div>
