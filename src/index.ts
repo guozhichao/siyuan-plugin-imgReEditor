@@ -156,17 +156,25 @@ export default class PluginSample extends Plugin {
 
         const dialog = new Dialog({
             title: title,
-            content: `<div id='ImageEditor' style='height: ${isScreenshotMode ? '100vh' : '90%'};'></div>`,
+            content: `<div id='ImageEditor' style='height: 90%;'></div>`,
             destroyCallback: () => { /* component destroyed in callback */ },
-            width: isScreenshotMode ? '100vw' : '1000px',
-            height: isScreenshotMode ? '100vh' : '700px'
+            width: '1000px',
+            height: '700px'
         });
 
+        // 如果是截图模式，直接设置样式实现全屏效果
         if (isScreenshotMode) {
-            dialog.element.querySelector('.b3-dialog__container').setAttribute('style', 'max-width: 100vw !important; max-height: 100vh !important; width: 100vw; height: 100vh;');
-            dialog.element.querySelector('.b3-dialog__body').setAttribute('style', 'padding: 0; display: flex; flex-direction: column;');
-            dialog.element.querySelector('.b3-dialog__header').setAttribute('style', 'display: none;');
+            const dialogContainer = dialog.element.querySelector('.b3-dialog__container') as HTMLElement;
+            if (dialogContainer) {
+                dialogContainer.style.width = '100vw';
+                dialogContainer.style.height = '100vh';
+                dialogContainer.style.maxWidth = 'unset';
+                dialogContainer.style.maxHeight = 'unset';
+                dialogContainer.style.top = '0';
+                dialogContainer.style.left = '0';
+            }
         }
+
 
         const target = dialog.element.querySelector('#ImageEditor') as HTMLElement;
         const comp = new ImageEditorComponent({
