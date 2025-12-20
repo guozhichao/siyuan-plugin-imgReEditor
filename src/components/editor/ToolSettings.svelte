@@ -30,6 +30,7 @@
     let highlightedIndex = -1;
     let fontInputFocused = false;
     let showGradientDesigner = false;
+    let showCanvasGradientDesigner = false;
 
     $: isGradient =
         typeof settings.fill === 'string' && settings.fill.startsWith('linear-gradient');
@@ -751,6 +752,56 @@
                 style="width: 80px;"
             />
         </div>
+        <div class="row">
+            <label for="canvas-bg-color">背景颜色</label>
+            <ColorPicker
+                colorKey="canvas-fill"
+                value={typeof settings.fill === 'string' &&
+                settings.fill.startsWith('linear-gradient')
+                    ? '#ffffff'
+                    : settings.fill || '#ffffff'}
+                {recentColors}
+                on:change={e => emitChange({ fill: e.detail })}
+                on:recentUpdate
+            />
+        </div>
+        <div class="row" style="margin-top: -4px; margin-bottom: 12px;">
+            <div class="presets">
+                {#each borderFillPresets as p}
+                    <button
+                        class="preset-btn"
+                        class:active={settings.fill === p.value}
+                        style="background: {p.value}"
+                        title={p.label}
+                        on:click={() => {
+                            emitChange({ fill: p.value });
+                        }}
+                    />
+                {/each}
+                <button
+                    class="preset-btn custom-btn"
+                    class:active={showCanvasGradientDesigner}
+                    title="设计渐变"
+                    on:click={() => (showCanvasGradientDesigner = !showCanvasGradientDesigner)}
+                >
+                    🎨
+                </button>
+            </div>
+        </div>
+
+        {#if showCanvasGradientDesigner}
+            <div class="row designer-row">
+                <GradientDesigner
+                    value={isGradient ? settings.fill : borderFillPresets[0].value}
+                    {recentColors}
+                    {savedGradients}
+                    on:change={e => emitChange({ fill: e.detail })}
+                    on:recentUpdate
+                    on:updateSavedGradients={e => dispatch('updateSavedGradients', e.detail)}
+                />
+            </div>
+        {/if}
+
         <div class="row" style="gap: 8px;">
             <button
                 on:click={() =>

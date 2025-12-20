@@ -16,6 +16,7 @@
         PencilBrush,
         FabricObject,
         Color,
+        Gradient,
     } from 'fabric';
     import { EraserBrush } from '@erase2d/fabric';
     import MosaicRect from './custom/MosaicRect';
@@ -85,6 +86,8 @@
         '_borderShadowBlur',
         '_borderShadowColor',
         '_borderShadowOpacity',
+        '_isCanvasBackground',
+        '_isCanvasBoundary',
     ];
     // Flag to prevent recursive history updates during undo/redo
     let isHistoryProcessing = false;
@@ -115,6 +118,7 @@
                     obj._isCropRect ||
                     obj._isImageBorder ||
                     obj._isCanvasBoundary ||
+                    obj._isCanvasBackground ||
                     (canvas && obj === canvas.backgroundImage)
                 ) {
                     obj.selectable = false;
@@ -1729,6 +1733,11 @@
                 currentNumber = options.count;
             }
         }
+        if (tool === 'canvas') {
+            if (options.fill) {
+                setCanvasBackground(options.fill);
+            }
+        }
 
         // provide sensible defaults for text tool
         if (tool === 'text') {
@@ -2531,8 +2540,8 @@
             // Set canvas to workspace size (avoids scrollbars and allows panning)
             canvas.setDimensions({ width: cw, height: ch });
 
-            // Set a neutral background color for canvas mode
-            canvas.backgroundColor = '#ffffff';
+            // Set a neutral background for editor visibility (not for export)
+            canvas.backgroundColor = '#f8f9fa';
 
             // Add a boundary rectangle to show canvas bounds (project size)
             const boundaryRect = new Rect({
@@ -2549,8 +2558,11 @@
                 hoverCursor: 'default',
                 excludeFromExport: true,
             });
-            (boundaryRect as any)._isCanvasBoundary = true;
+            boundaryRect.set('_isCanvasBoundary', true);
             canvas.add(boundaryRect);
+
+            // Set initial white background rectangle for export
+            setCanvasBackground('#ffffff');
 
             canvas.requestRenderAll();
 
@@ -3174,7 +3186,7 @@
                     hoverCursor: 'default',
                     excludeFromExport: true,
                 });
-                (boundaryRect as any)._isCanvasBoundary = true;
+                boundaryRect.set('_isCanvasBoundary', true);
                 canvas.add(boundaryRect);
                 canvas.sendObjectToBack(boundaryRect);
             }
@@ -3561,9 +3573,8 @@
 
     export async function toJSON() {
         if (!canvas) return null;
-        // Standard toJSON includes HISTORY_PROPS for top-level objects.
-        // We also want to ensure custom metadata on backgroundImage is included.
-        const json = (canvas as any).toJSON(HISTORY_PROPS);
+        // Standard toObject includes HISTORY_PROPS for top-level objects.
+        const json = (canvas as any).toObject(HISTORY_PROPS);
 
         // For canvas mode, add project dimensions from boundary rectangle and remove backgroundImage to avoid blob URL issues
         if (isCanvasMode) {
@@ -3695,9 +3706,72 @@
                     hoverCursor: 'default',
                     excludeFromExport: true,
                 });
-                (boundaryRect as any)._isCanvasBoundary = true;
+                boundaryRect.set('_isCanvasBoundary', true);
                 canvas.add(boundaryRect);
                 canvas.sendObjectToBack(boundaryRect);
+
+                // Repair flags for both boundary and background if they were lost
+                let boundary = canvas.getObjects().find((o: any) => (o as any)._isCanvasBoundary);
+                if (!boundary) {
+                    // Boundary is always excluded from export and transparent
+                    const bCandidate = canvas
+                        .getObjects()
+                        .find(
+                            (o: any) =>
+                                o.type === 'rect' &&
+                                o.excludeFromExport === true &&
+                                o.fill === 'transparent'
+                        );
+                    if (bCandidate) {
+                        bCandidate.set('_isCanvasBoundary', true);
+                        boundary = bCandidate;
+                    }
+                }
+
+                let bgs = canvas.getObjects().filter((o: any) => (o as any)._isCanvasBackground);
+                if (bgs.length === 0) {
+                    // Background is a Rect that is NOT excluded from export and is at the bottom
+                    const bgCandidate = canvas
+                        .getObjects()
+                        .find(
+                            (o: any) =>
+                                o.type === 'rect' &&
+                                !o.excludeFromExport &&
+                                !(o as any)._isCanvasBoundary
+                        );
+                    if (bgCandidate) {
+                        bgCandidate.set('_isCanvasBackground', true);
+                        bgs = [bgCandidate];
+                    }
+                }
+
+                // Always enforce locked properties on boundary
+                if (boundary) {
+                    boundary.set({
+                        selectable: false,
+                        evented: false,
+                        excludeFromExport: true,
+                        hoverCursor: 'default',
+                    });
+                    canvas.sendObjectToBack(boundary);
+                }
+
+                // Always enforce locked properties on background(s)
+                bgs.forEach(bg => {
+                    bg.set({
+                        selectable: false,
+                        evented: false,
+                        hoverCursor: 'default',
+                        lockMovementX: true,
+                        lockMovementY: true,
+                        lockScalingX: true,
+                        lockScalingY: true,
+                        lockRotation: true,
+                    });
+                    canvas.sendObjectToBack(bg);
+                    // If boundary exists, it must be behind the background
+                    if (boundary) canvas.sendObjectToBack(boundary);
+                });
             } else {
                 // Standard mode: restore canvas dimensions if they were saved
                 if (json.width && json.height) {
@@ -4144,6 +4218,13 @@
                 boundaryRect.setCoords();
             }
 
+            // Update background if exists
+            if (activeToolOptions && activeToolOptions.fill) {
+                setCanvasBackground(activeToolOptions.fill);
+            } else {
+                updateCanvasBackgroundSize();
+            }
+
             // Fit to viewport
             fitImageToViewport();
             canvas.requestRenderAll();
@@ -4154,6 +4235,92 @@
         } catch (e) {
             console.error('CanvasEditor: resizeCanvas failed:', e);
         }
+    }
+
+    function updateCanvasBackgroundSize() {
+        if (!canvas || !isCanvasMode) return;
+        const bgNode = canvas.getObjects().find((o: any) => o._isCanvasBackground);
+        const boundary = canvas.getObjects().find((o: any) => o._isCanvasBoundary);
+        if (bgNode && boundary) {
+            bgNode.set({
+                width: boundary.width,
+                height: boundary.height,
+                left: boundary.left,
+                top: boundary.top,
+            });
+            // If it's a gradient, we might need to refresh it because coords depend on size
+            const fill = activeToolOptions.fill;
+            if (fill && typeof fill === 'string' && fill.startsWith('linear-gradient')) {
+                setCanvasBackground(fill);
+            }
+        }
+    }
+
+    export function setCanvasBackground(fill: any) {
+        if (!canvas || !isCanvasMode) return;
+
+        let bgNode = canvas.getObjects().find((o: any) => (o as any)._isCanvasBackground) as Rect;
+        const boundary = canvas.getObjects().find((o: any) => (o as any)._isCanvasBoundary) as Rect;
+
+        const w = boundary ? boundary.width : (canvas as any).width || 800;
+        const h = boundary ? boundary.height : (canvas as any).height || 600;
+        const left = boundary ? boundary.left : 0;
+        const top = boundary ? boundary.top : 0;
+
+        if (!bgNode) {
+            bgNode = new Rect({
+                left,
+                top,
+                width: w,
+                height: h,
+                selectable: false,
+                evented: false,
+                excludeFromExport: false,
+            });
+            bgNode.set('_isCanvasBackground', true);
+            canvas.add(bgNode);
+            canvas.sendObjectToBack(bgNode);
+            if (boundary) canvas.sendObjectToBack(boundary);
+        } else {
+            bgNode.set({ left, top, width: w, height: h });
+        }
+
+        if (typeof fill === 'string' && fill.startsWith('linear-gradient')) {
+            const match = fill.match(
+                /linear-gradient\((\d+)deg,\s*(#[a-fA-F0-9]{3,6})\s+0%,\s*(#[a-fA-F0-9]{3,6})\s+100%\)/i
+            );
+            if (match) {
+                const angle = parseInt(match[1]);
+                const c1 = match[2];
+                const c2 = match[3];
+
+                const angleRad = ((angle - 90) * Math.PI) / 180;
+                const length = Math.abs(w * Math.cos(angleRad)) + Math.abs(h * Math.sin(angleRad));
+                const halfLen = length / 2;
+
+                bgNode.set(
+                    'fill',
+                    new Gradient({
+                        type: 'linear',
+                        gradientUnits: 'pixels',
+                        coords: {
+                            x1: w / 2 - Math.cos(angleRad) * halfLen,
+                            y1: h / 2 - Math.sin(angleRad) * halfLen,
+                            x2: w / 2 + Math.cos(angleRad) * halfLen,
+                            y2: h / 2 + Math.sin(angleRad) * halfLen,
+                        },
+                        colorStops: [
+                            { offset: 0, color: c1 },
+                            { offset: 1, color: c2 },
+                        ],
+                    })
+                );
+            }
+        } else {
+            bgNode.set('fill', fill);
+        }
+
+        canvas.requestRenderAll();
     }
 
     // Help to add a fabric image from a URL/File
