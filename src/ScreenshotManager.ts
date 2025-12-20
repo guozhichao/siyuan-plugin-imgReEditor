@@ -151,7 +151,7 @@ export class ScreenshotManager {
                     width: Math.round(winWidth),
                     height: Math.round(winHeight),
                     frame: false,
-                    transparent: true,
+                    transparent: false,
                     alwaysOnTop: true,
                     skipTaskbar: false,
                     resizable: true,
@@ -165,7 +165,6 @@ export class ScreenshotManager {
                 <html>
                 <body style="margin:0;padding:0;overflow:hidden;background:transparent;display:flex;justify-content:center;align-items:center;-webkit-app-region: drag;">
                     <img src="${dataURL}" style="width:100%;height:100%;object-fit:contain;pointer-events:none;" />
-                    <div style="position:absolute;top:0;right:0;padding:4px;cursor:pointer;-webkit-app-region: no-drag;background:rgba(0,0,0,0.5);color:white;border-bottom-left-radius:4px;font-family:sans-serif;font-size:12px;" onclick="window.close()">X</div>
                 </body>
                 </html>
                 `;
