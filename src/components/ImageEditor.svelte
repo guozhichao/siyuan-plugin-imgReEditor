@@ -158,10 +158,8 @@
             clipboard.writeBuffer(
                 'FileNameW',
                 Buffer.concat([Buffer.from(path, 'ucs-2'), Buffer.from([0, 0])])
-
             );
             console.log('Copied screenshot to clipboard, file path:', path);
-
 
             pushMsg('文件已保存到历史并复制到剪贴板');
         } catch (e) {
