@@ -169,6 +169,9 @@ export class ScreenshotManager {
                 </html>
                 `;
                 win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(content)}`);
+                try {
+                    win.setAspectRatio(Math.round(winWidth) / Math.round(winHeight));
+                } catch (e) { }
             };
             img.src = dataURL;
         } catch (e) {
