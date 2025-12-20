@@ -277,6 +277,16 @@
                 <path d="M5 21h14" />
             </svg>
         </button>
+        <button
+            class="b3-button b3-button--outline"
+            on:click={() => emit('history')}
+            title="截图历史"
+        >
+            <svg class="icon" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12,6 12,12 16,14" />
+            </svg>
+        </button>
     {/if}
 
     {#if !isScreenshotMode}
