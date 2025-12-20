@@ -177,6 +177,19 @@
             </svg>
         </button>
     {/if}
+    <button
+        class="b3-button"
+        class:active={active === 'image'}
+        class:b3-button--outline={active !== 'image'}
+        on:click={() => emit('tool', { tool: 'image' })}
+        title="图片工具"
+    >
+        <svg class="icon" viewBox="0 0 24 24">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+            <circle cx="8.5" cy="8.5" r="1.5" />
+            <path d="M21 15l-5-5L5 21" />
+        </svg>
+    </button>
     {#if isCanvasMode}
         <button
             class="b3-button"

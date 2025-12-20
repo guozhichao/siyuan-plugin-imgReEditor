@@ -727,6 +727,62 @@
             />
             <span class="val">{settings.blockSize || 15}</span>
         </div>
+    {:else if tool === 'image'}
+        {#if settings.isSelection}
+            <div class="row">
+                <label for="img-width">宽度</label>
+                <input
+                    id="img-width"
+                    type="number"
+                    value={settings.width}
+                    on:input={e => emitChange({ width: +getValue(e) })}
+                    style="width: 80px;"
+                />
+                <span class="val">px</span>
+            </div>
+            <div class="row">
+                <label for="img-height">高度</label>
+                <input
+                    id="img-height"
+                    type="number"
+                    value={settings.height}
+                    on:input={e => emitChange({ height: +getValue(e) })}
+                    style="width: 80px;"
+                />
+                <span class="val">px</span>
+            </div>
+            <div class="row">
+                <label for="img-lock-ratio">锁定比例</label>
+                <input
+                    id="img-lock-ratio"
+                    type="checkbox"
+                    checked={settings.lockAspectRatio !== false}
+                    on:change={e => emitChange({ lockAspectRatio: getChecked(e) })}
+                />
+            </div>
+            <div class="row">
+                <button
+                    class="b3-button b3-button--outline"
+                    on:click={() => dispatch('action', { action: 'enterImageCropMode' })}
+                    style="width: 100%;"
+                >
+                    裁剪图片
+                </button>
+            </div>
+            <div
+                class="row"
+                style="border-top: 1px solid rgba(0,0,0,0.06); padding-top: 12px; margin-top: 4px;"
+            ></div>
+        {/if}
+        <div class="row">
+            <button
+                class="b3-button b3-button--outline"
+                on:click={() => dispatch('action', { action: 'uploadImage' })}
+                style="width: 100%;"
+            >
+                上传并添加图片
+            </button>
+        </div>
     {:else if tool === 'canvas'}
         <div class="row">
             <label for="canvas-width">画布宽度</label>

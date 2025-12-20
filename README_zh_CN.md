@@ -22,6 +22,8 @@
 
 <img alt="image" src="https://assets.b3logfile.com/siyuan/1610205759005/assets/image-20251219182552-59o8aso.png" />
 
+![](https://fastly.jsdelivr.net/gh/Achuan-2/PicBed/assets/20251221001756-2025-12-21.png)
+
 3. 支持截图: `Ctrl+~`截图并标注，支持保存截图历史，支持截图后贴图
 
 ## 功能介绍
@@ -47,7 +49,7 @@
 
 插件支持快速添加图片边框，把图改为精致的博客风格，如果你想要给笔记里的截图添加圆角+边框效果，过去要使用专门的软件才能做到
 
-<img alt="" src="https://assets.b3logfile.com/siyuan/1610205759005/assets/canvas-20251219190916-bvjnhqo.png" style="width: 603px;" />
+![](https://fastly.jsdelivr.net/gh/Achuan-2/PicBed/assets/20251221002000-2025-12-21.png)
 
 现在只需要在思源笔记里点击一下就可以创建这样的图了！
 

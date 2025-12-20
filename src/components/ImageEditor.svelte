@@ -863,6 +863,7 @@
             'image-border',
             'align',
             'canvas',
+            'image',
         ].includes(t);
         showToolPopup = hasSubmenu;
         // Only update popup position on first open (before user drags it)
@@ -1358,6 +1359,12 @@
                             马赛克设置
                         {:else if activeTool === 'image-border'}
                             图片边框
+                        {:else if activeTool === 'align'}
+                            对齐设置
+                        {:else if activeTool === 'canvas'}
+                            画布设置
+                        {:else if activeTool === 'image'}
+                            图片工具
                         {:else}
                             {activeTool}
                         {/if}
@@ -1449,6 +1456,9 @@
                                     }
                                 } else if (action === 'uploadImage') {
                                     canvasEditorRef.uploadImage && canvasEditorRef.uploadImage();
+                                } else if (action === 'enterImageCropMode') {
+                                    canvasEditorRef.enterImageCropMode &&
+                                        canvasEditorRef.enterImageCropMode();
                                 }
                             } catch (err) {
                                 console.warn('Action failed', err);

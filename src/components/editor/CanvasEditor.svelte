@@ -29,6 +29,7 @@
         createSelectCanvasSizeControls,
     } from './custom/initControls';
     import initControlsRotate from './custom/initControlsRotate';
+    import { pushErrMsg } from '../../api';
 
     export let dataURL: string | null = null;
     export let fileName: string | undefined;
@@ -39,6 +40,10 @@
     // active tool state
     let activeTool: string | null = null;
     let activeToolOptions: any = {};
+    // image crop state
+    let isImageCropping = false;
+    let targetImageToCrop: any = null;
+    let imageCropBackup: any = null;
     // shape drawing state
     let isDrawingShape = false;
     let shapeStart = { x: 0, y: 0 };
@@ -319,7 +324,6 @@
             const objs = (canvas.getActiveObjects && canvas.getActiveObjects()) || [];
             if (!objs || objs.length === 0) return;
 
-            // Allow copy of various drawable objects
             const allowed = objs.filter((o: any) =>
                 [
                     'rect',
@@ -334,6 +338,7 @@
                     'triangle',
                     'arrow',
                     'number-marker',
+                    'image',
                 ].includes(o.type)
             );
 
@@ -351,6 +356,8 @@
                     'count',
                     'textColor',
                     'fontSize',
+                    '_originalSrc',
+                    '_cropOffset',
                 ])
             );
 
@@ -397,6 +404,7 @@
                     'textbox',
                     'text',
                     'number-marker',
+                    'image',
                 ].includes(o.type)
             );
             if (allowed.length === 0) return;
@@ -443,6 +451,12 @@
                     }
                     if (data && data.erasable !== undefined) {
                         (o as any).erasable = data.erasable;
+                    }
+                    if (data && data._originalSrc) {
+                        (o as any)._originalSrc = data._originalSrc;
+                    }
+                    if (data && data._cropOffset) {
+                        (o as any)._cropOffset = data._cropOffset;
                     }
 
                     canvas.add(o);
@@ -1426,6 +1440,16 @@
                         },
                         type: 'mosaic-rect',
                     });
+                } else if (active.type === 'image') {
+                    dispatch('selection', {
+                        options: {
+                            width: Math.round(active.getScaledWidth()),
+                            height: Math.round(active.getScaledHeight()),
+                            lockAspectRatio: (active as any).lockAspectRatio !== false,
+                            isSelection: true,
+                        },
+                        type: 'image',
+                    });
                 }
             } catch (e) {}
         }
@@ -1733,6 +1757,10 @@
             } else if (typeof options.count !== 'undefined' && !options.isSelection) {
                 currentNumber = options.count;
             }
+        }
+        if (tool === 'image') {
+            // image tool: default cursor and ensure selection mode
+            if (canvas) canvas.defaultCursor = 'default';
         }
         if (tool === 'canvas') {
             if (options.fill) {
@@ -2288,49 +2316,246 @@
         // Notify parent that crop mode is finished (cancelled or exited)
         // so it can update the toolbar selection state.
         dispatch('cropCancel');
+        if (cropRect) {
+            canvas.remove(cropRect);
+            cropRect = null;
+        }
+        cropMode = false;
+        restoreObjectSelectionStates();
+        canvas.requestRenderAll();
+    }
 
-        // remove handlers
-        if (_cropHandlers) {
-            try {
-                canvas.off('mouse:down', _cropHandlers.onMouseDown);
-            } catch (e) {}
-            try {
-                canvas.off('mouse:move', _cropHandlers.onMouseMove);
-            } catch (e) {}
-            try {
-                canvas.off('mouse:up', _cropHandlers.onMouseUp);
-            } catch (e) {}
-            _cropHandlers = null;
+    export async function enterImageCropMode() {
+        if (!canvas) return;
+        const active = canvas.getActiveObject() as any;
+        if (!active || active.type !== 'image') return;
+
+        targetImageToCrop = active;
+        isImageCropping = true;
+
+        // Ensure metadata exists
+        if (!active._originalSrc) {
+            // Use current element source as original if not set
+            // In v6, fImg._element.src might be a blob or dataURL
+            active._originalSrc = active._element?.src;
+            active._cropOffset = { x: 0, y: 0 };
         }
 
-        // If we exit forcefully without Enter/Escape (e.g. switching tool), we generally assume cancel?
-        // Or if there is a rect, should we apply it?
-        // Usually switching tools implies cancelling the current modal operation.
-        // So we should perform the "Escape" logic (revert restore).
+        const originalSrc = active._originalSrc;
+        const cropOffset = active._cropOffset || { x: 0, y: 0 };
+        const currentScaleX = active.scaleX;
+        const currentScaleY = active.scaleY;
+
+        // Backup current state for cancellation/application
+        imageCropBackup = {
+            left: active.left,
+            top: active.top,
+            width: active.width,
+            height: active.height,
+            scaleX: active.scaleX,
+            scaleY: active.scaleY,
+            angle: active.angle,
+            element: active._element,
+            cropOffset: { ...cropOffset },
+        };
+
+        // Load the original full image
+        const imgEl = new Image();
+        imgEl.onload = () => {
+            if (!canvas || !targetImageToCrop) return;
+
+            // To make cropping easy, we temporarily set angle to 0.
+            // When applying or cancelling, we will restore the rotation.
+            // We calculate where the original top-left (0,0) would be at angle 0.
+            const origLeft = targetImageToCrop.left - cropOffset.x * currentScaleX;
+            const origTop = targetImageToCrop.top - cropOffset.y * currentScaleY;
+
+            // Temporarily show full image at angle 0
+            targetImageToCrop.set({
+                angle: 0,
+                left: origLeft,
+                top: origTop,
+                width: imgEl.naturalWidth,
+                height: imgEl.naturalHeight,
+                // scaled correctly
+            });
+            targetImageToCrop.setElement(imgEl);
+
+            // Create CropRect at the previous visual bounds (now at angle 0)
+            const visualLeft = targetImageToCrop.left + cropOffset.x * currentScaleX;
+            const visualTop = targetImageToCrop.top + cropOffset.y * currentScaleY;
+            const visualWidth = imageCropBackup.width * currentScaleX;
+            const visualHeight = imageCropBackup.height * currentScaleY;
+
+            if (cropRect) canvas.remove(cropRect);
+            cropRect = new CropRect({
+                left: visualLeft,
+                top: visualTop,
+                width: visualWidth,
+                height: visualHeight,
+                fill: 'transparent',
+                stroke: '#00ccff',
+                strokeWidth: 2,
+                strokeDashArray: [5, 5],
+                selectable: true,
+                evented: true,
+                lockRotation: true,
+                hasControls: true,
+                hasBorders: true,
+            });
+
+            const cropControls = createCropControls(
+                () => {
+                    applyImageCrop();
+                    return true;
+                },
+                () => {
+                    exitImageCropMode();
+                    return true;
+                }
+            );
+            cropRect.setCustomControls(cropControls);
+
+            // Disable other objects during crop
+            canvas.getObjects().forEach((obj: any) => {
+                if (obj !== cropRect && obj !== targetImageToCrop) {
+                    obj.selectable = false;
+                    obj.evented = false;
+                }
+            });
+
+            canvas.add(cropRect);
+            canvas.setActiveObject(cropRect);
+            canvas.requestRenderAll();
+        };
+        imgEl.onerror = () => {
+            isImageCropping = false;
+            targetImageToCrop = null;
+            pushErrMsg('加载原图失败');
+        };
+        imgEl.src = originalSrc;
+    }
+
+    async function applyImageCrop() {
+        if (!canvas || !cropRect || !targetImageToCrop || !imageCropBackup) return;
 
         try {
-            if (cropRect) {
-                canvas.remove(cropRect);
+            const boundingRect = cropRect.getBoundingRect();
+            const { left, top, width, height } = boundingRect;
+
+            if (width < 5 || height < 5) {
+                exitImageCropMode();
+                return;
             }
-        } catch (e) {}
-        cropRect = null;
 
-        fitImageToViewport();
-        cropMode = false;
-        try {
-            document.removeEventListener('keydown', _cropKeyHandler as any);
-        } catch (e) {}
-        _cropKeyHandler = null;
+            // 1. Calculate the new crop offset within the ORIGINAL image
+            // Since targetImageToCrop is currently the full original at angle 0
+            const currentScaleX = targetImageToCrop.scaleX;
+            const currentScaleY = targetImageToCrop.scaleY;
+            const newOffset = {
+                x: (left - targetImageToCrop.left) / currentScaleX,
+                y: (top - targetImageToCrop.top) / currentScaleY,
+            };
 
-        // Ensure the crop tool is deselected in the UI when exiting crop mode
-        try {
-            setTool(null);
-        } catch (e) {}
-        dispatch('cropApplied', null);
-        canvas.getObjects().forEach((obj: any) => {
-            obj.selectable = true;
-            obj.evented = true;
-        });
+            // 2. Create baked image
+            const cropCanvas = document.createElement('canvas');
+            cropCanvas.width = width;
+            cropCanvas.height = height;
+            const ctx = cropCanvas.getContext('2d');
+            if (!ctx) return;
+
+            ctx.translate(-left, -top);
+            targetImageToCrop.render(ctx);
+
+            const originalSrc = targetImageToCrop._originalSrc;
+
+            // 3. Create the new baked FabricImage
+            const newImg = new FabricImage(cropCanvas, {
+                selectable: true,
+                evented: true,
+            });
+
+            // Set metadata
+            (newImg as any)._originalSrc = originalSrc;
+            (newImg as any)._cropOffset = newOffset;
+
+            // 4. Restore rotation and position
+            // We use the center of the crop rect and rotate it around the original image's center as it was.
+            const cropCenter = {
+                x: left + width / 2,
+                y: top + height / 2,
+            };
+
+            // Original center (pivot):
+            const origL = targetImageToCrop.left;
+            const origT = targetImageToCrop.top;
+            const origW = targetImageToCrop.width * currentScaleX;
+            const origH = targetImageToCrop.height * currentScaleY;
+            const pivot = { x: origL + origW / 2, y: origT + origH / 2 };
+
+            const angleRad = (imageCropBackup.angle * Math.PI) / 180;
+            const rotatedCenter = util.rotatePoint(
+                new Point(cropCenter.x, cropCenter.y),
+                new Point(pivot.x, pivot.y),
+                angleRad
+            );
+
+            newImg.set({
+                originX: 'center',
+                originY: 'center',
+                left: rotatedCenter.x,
+                top: rotatedCenter.y,
+                angle: imageCropBackup.angle,
+            });
+            newImg.setCoords();
+
+            canvas.add(newImg);
+            canvas.remove(targetImageToCrop);
+            canvas.remove(cropRect);
+
+            // Notify parent and cleanup
+            isImageCropping = false;
+            targetImageToCrop = null;
+            imageCropBackup = null;
+            cropRect = null;
+
+            restoreObjectSelectionStates();
+            canvas.setActiveObject(newImg);
+            canvas.requestRenderAll();
+            schedulePushWithType('modified');
+        } catch (e) {
+            console.warn('applyImageCrop failed', e);
+        }
+    }
+
+    export function exitImageCropMode() {
+        if (!canvas) return;
+
+        // If we have a backup and we're not finishing normally (applying), restore it
+        if (targetImageToCrop && imageCropBackup) {
+            targetImageToCrop.set({
+                left: imageCropBackup.left,
+                top: imageCropBackup.top,
+                width: imageCropBackup.width,
+                height: imageCropBackup.height,
+                scaleX: imageCropBackup.scaleX,
+                scaleY: imageCropBackup.scaleY,
+                angle: imageCropBackup.angle,
+            });
+            targetImageToCrop.setElement(imageCropBackup.element);
+            targetImageToCrop.setCoords();
+        }
+
+        if (cropRect) {
+            canvas.remove(cropRect);
+            cropRect = null;
+        }
+
+        isImageCropping = false;
+        targetImageToCrop = null;
+        imageCropBackup = null;
+
+        restoreObjectSelectionStates();
         canvas.requestRenderAll();
     }
 
@@ -2444,7 +2669,7 @@
         }
 
         // Use bounding rect to take into account object scaling and transforms
-        const bounding = selectCanvasSizeRect.getBoundingRect(true);
+        const bounding = selectCanvasSizeRect.getBoundingRect();
         const rectLeft = Math.round(bounding.left || 0);
         const rectTop = Math.round(bounding.top || 0);
         const width = Math.max(0, Math.round(bounding.width || 0));
@@ -3069,6 +3294,7 @@
 
             // Exit crop mode if active before undoing
             if (cropMode) exitCropMode();
+            if (isImageCropping) exitImageCropMode(); // Exit image crop mode too
 
             isHistoryProcessing = true;
             historyIndex--;
@@ -3125,6 +3351,7 @@
 
             // Exit crop mode if active before redoing
             if (cropMode) exitCropMode();
+            if (isImageCropping) exitImageCropMode(); // Exit image crop mode too
 
             isHistoryProcessing = true;
             historyIndex++;
@@ -3255,7 +3482,8 @@
         if (
             activeTool === 'canvas' ||
             activeTool === 'transform' ||
-            activeTool === 'image-border'
+            activeTool === 'image-border' ||
+            activeTool === 'image' // Handle image tool
         ) {
             const opts = { ...(activeToolOptions || {}) };
             if (typeof opts.width === 'undefined' || typeof opts.height === 'undefined') {
@@ -3271,6 +3499,15 @@
                         opts.width = Math.round((bg.width || 0) * (bg.scaleX || 1));
                         opts.height = Math.round((bg.height || 0) * (bg.scaleY || 1));
                     }
+                }
+            }
+            // If an image is selected, update options with its dimensions
+            if (activeTool === 'image') {
+                const activeObject = canvas?.getActiveObject();
+                if (activeObject && activeObject.type === 'image') {
+                    opts.width = Math.round(activeObject.getScaledWidth());
+                    opts.height = Math.round(activeObject.getScaledHeight());
+                    opts.lockAspectRatio = (activeObject as any).lockUniScaling;
                 }
             }
             return opts;
@@ -3473,8 +3710,61 @@
                                 o.dirty = true;
                             }
                         }
-                        o.setCoords && o.setCoords();
+
+                        // image objects
+                        if (o.type === 'image') {
+                            if (
+                                typeof options.width !== 'undefined' ||
+                                typeof options.height !== 'undefined'
+                            ) {
+                                const curW = o.getScaledWidth();
+                                const curH = o.getScaledHeight();
+                                const ratio = curW / curH;
+                                const lock = options.lockAspectRatio !== false;
+
+                                let newW =
+                                    typeof options.width !== 'undefined' ? options.width : curW;
+                                let newH =
+                                    typeof options.height !== 'undefined' ? options.height : curH;
+
+                                if (lock) {
+                                    if (
+                                        typeof options.width !== 'undefined' &&
+                                        typeof options.height === 'undefined'
+                                    ) {
+                                        newH = Math.round(newW / ratio);
+                                    } else if (
+                                        typeof options.height !== 'undefined' &&
+                                        typeof options.width === 'undefined'
+                                    ) {
+                                        newW = Math.round(newH * ratio);
+                                    }
+                                }
+
+                                o.set({
+                                    scaleX: newW / (o.width || 1),
+                                    scaleY: newH / (o.height || 1),
+                                    lockUniScaling: lock,
+                                });
+                                o.setCoords();
+
+                                // Update tool options to reflect new state
+                                activeToolOptions.width = Math.round(newW);
+                                activeToolOptions.height = Math.round(newH);
+                                setTimeout(() => {
+                                    dispatch('selection', {
+                                        options: { ...activeToolOptions },
+                                        type: 'image',
+                                    });
+                                }, 10);
+                            }
+                            if (typeof options.lockAspectRatio !== 'undefined') {
+                                o.set('lockAspectRatio', options.lockAspectRatio);
+                                o.set('lockUniScaling', options.lockAspectRatio);
+                            }
+                        }
                     }
+                    o.setCoords && o.setCoords();
                 } catch (e) {}
             });
             canvas.requestRenderAll();
@@ -3995,7 +4285,7 @@
             let refRect: any = null;
             if (allowed.length > 1 && !forceCanvas) {
                 try {
-                    refRect = allowed[0].getBoundingRect(true);
+                    refRect = allowed[0].getBoundingRect();
                 } catch (e) {
                     refRect = null;
                 }
@@ -4007,7 +4297,7 @@
                     try {
                         const bg = canvas.backgroundImage as any;
                         // Use Fabric's getBoundingRect to compute actual displayed bounds
-                        const brect = bg.getBoundingRect(true);
+                        const brect = bg.getBoundingRect();
                         refRect = {
                             left: brect.left,
                             top: brect.top,
@@ -4046,7 +4336,7 @@
             allowed.forEach((o: any) => {
                 try {
                     if (o === refObj) return;
-                    const rect = o.getBoundingRect(true);
+                    const rect = o.getBoundingRect();
                     let dx = 0;
                     let dy = 0;
                     if (type === 'h-left') {
@@ -4112,7 +4402,7 @@
 
             // compute key positions and sort
             const items = allowed.map(o => {
-                const r = o.getBoundingRect(true);
+                const r = o.getBoundingRect();
                 return { o, rect: r };
             });
 
@@ -4336,6 +4626,10 @@
                 selectable: true,
                 evented: true,
             });
+
+            // Initialize metadata for cropping
+            (fImg as any)._originalSrc = url;
+            (fImg as any)._cropOffset = { x: 0, y: 0 };
             // Scale down if too large
             const maxW = canvas!.width! * 0.8;
             const maxH = canvas!.height! * 0.8;
