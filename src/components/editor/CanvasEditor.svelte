@@ -2464,6 +2464,18 @@
             );
             cropRect.setCustomControls(cropControls);
 
+            // Keyboard handler for crop
+            _cropKeyHandler = (e: KeyboardEvent) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    applyImageCrop();
+                } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    exitImageCropMode();
+                }
+            };
+            document.addEventListener('keydown', _cropKeyHandler as any);
+
             // Disable other objects during crop
             canvas.getObjects().forEach((obj: any) => {
                 if (obj !== cropRect && obj !== targetImageToCrop) {
@@ -2604,6 +2616,11 @@
             imageCropBackup = null;
             cropRect = null;
 
+            if (_cropKeyHandler) {
+                document.removeEventListener('keydown', _cropKeyHandler as any);
+                _cropKeyHandler = null;
+            }
+
             restoreObjectSelectionStates();
             canvas.setActiveObject(newImg);
             canvas.requestRenderAll();
@@ -2636,6 +2653,11 @@
         if (cropRect) {
             canvas.remove(cropRect);
             cropRect = null;
+        }
+
+        if (_cropKeyHandler) {
+            document.removeEventListener('keydown', _cropKeyHandler as any);
+            _cropKeyHandler = null;
         }
 
         isImageCropping = false;
