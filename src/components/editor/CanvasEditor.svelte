@@ -2545,6 +2545,9 @@
                         (fImg as any)._originalSrc = url;
                         (fImg as any)._cropOffset = { x: 0, y: 0 };
 
+                        // Set as background image by default (will be replaced if initialRect is applied)
+                        (canvas as any).backgroundImage = fImg;
+
                         // If initialRect is provided (e.g. from screenshot selection), apply it immediately
                         if (initialRect && initialRect.width > 0 && initialRect.height > 0) {
                             try {
