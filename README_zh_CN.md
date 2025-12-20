@@ -1,3 +1,5 @@
+插件 Github 地址：https://github.com/Achuan-2/siyuan-plugin-image-editor
+
 ## 📝更新日志
 
 见[CHANGELOG.md](https://cdn.jsdelivr.net/gh/Achuan-2/siyuan-plugin-imgReEditor@main/CHANGELOG.md)
@@ -8,7 +10,7 @@
 
 于是，我开发了 ImgReEditor 这个插件，终于实现了已编辑的图片还能二次编辑。
 
-一开始是调用 tui.image-editor 这个开源编辑器，但是后来发现不方便修改，想要让裁剪能二次修改、添加序号、马赛克工具很麻烦。于是就让ai使用 fabric 从无到有自己写了一个图片编辑器
+一开始是调用 tui.image-editor 这个开源编辑器，但是后来发现不方便修改，想要让裁剪能二次修改、添加序号、马赛克工具很麻烦。于是就让ai使用 fabric.js 从无到有自己写了一个图片编辑器
 
 ## 如何使用
 
@@ -36,6 +38,7 @@
   - 添加马赛克
   - 添加图片边框
 - 保存png图片支持二次编辑插件添加的图片修改和标注内容
+- 画布模式：支持在一个画布里添加多个图片进行编辑和排版
 
 <img alt="image" src="https://assets.b3logfile.com/siyuan/1610205759005/assets/image-20251219163257-4crcvcx.png" />
 
@@ -48,14 +51,28 @@
 
 <img alt="PixPin_2025-12-19_16-20-19" src="https://assets.b3logfile.com/siyuan/1610205759005/assets/PixPin_2025-12-19_16-20-19-20251219163430-4jzg17t.gif" />
 
-## **快捷键**
+## 使用细节
 
-- Esc：
+**常用快捷键**
+
+- Esc：取消选中
 
   - 选中形状后取消选中；
-  - 编辑文字后按Esc可变为选中状态进行移动，再按Esc则取消选中
+  - 编辑文字后按 Esc 可变为选中状态进行移动，再按 Esc 则取消选中
 - Ctrl+C/Ctrl+V：复制/粘贴
 - Ctrl+Z/Ctrl+Y：撤回/重做
+
+**矩形、箭头、文字等工具如何快速进入选择对象状态**
+
+- 这些工具直接点击的话是新增对象状态，虽然也支持点击选择当前已有的对象，但是没点到的话就容易误增加对象，一个技巧是，按住Ctrl即可快速进入选择状态，只能选择对象，不会再误添加对象，并且支持多选对象进行批量设置样式和对齐等操作
+- 文字工具参考了Adobe illustrator交互，按Ctrl可以拖动，不拖动还可以继续编辑，这样不影响Ctrl+C/Ctrl+V复制粘贴文字
+
+**选中形状后，可以对形状进行拉伸和旋转，旋转技巧**
+
+- 旋转按钮：选中形状的选框正下方有旋转按钮，四个角鼠标悬浮也会显示旋转按钮，可以进行调整形状角度
+- 按住shift进行拖动，会吸附到 45° 倍数
+
+![](https://fastly.jsdelivr.net/gh/Achuan-2/PicBed/assets/20251220115034-2025-12-20.png)
 
 ## 设置
 
@@ -86,13 +103,12 @@
 MIT License
 
 
-## 🔧 开发相关
+## 🔧 如何打包插件
 
 ```bash
 pnpm install
 pnpm run dev
-```
-
+```.js
 
 ## 🙏 致谢
 
