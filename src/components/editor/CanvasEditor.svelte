@@ -544,6 +544,7 @@
             preserveObjectStacking: true,
             renderOnAddRemove: true,
             selectionKey: 'ctrlKey',
+            backgroundColor: 'transparent',
         });
 
         // Initialize custom controls
@@ -2541,7 +2542,7 @@
             canvas.setDimensions({ width: cw, height: ch });
 
             // Set a neutral background for editor visibility (not for export)
-            canvas.backgroundColor = '#f8f9fa';
+            canvas.backgroundColor = 'transparent';
 
             // Add a boundary rectangle to show canvas bounds (project size)
             const boundaryRect = new Rect({
@@ -3681,6 +3682,7 @@
             if (isCanvasMode) {
                 // For canvas mode, set canvas size to workspace and use saved width/height for boundary
                 canvas.setDimensions({ width: cw, height: ch });
+                canvas.backgroundColor = 'transparent';
 
                 const w = json.width || 800;
                 const h = json.height || 600;
