@@ -311,7 +311,6 @@
     }
 
     async function handleHistory() {
-        onClose?.(false); // Close current editor
         // Open history dialog
         dispatch('openHistory');
     }
@@ -426,6 +425,13 @@
             imageBlob = blob;
             // extract filename/ext
             originalFileName = imagePath.split('/').pop() || 'image.png';
+
+            // If in screenshot mode and path matches history directory, track it to ensure we update instead of create
+            if (isScreenshotMode && imagePath && imagePath.startsWith(SCREENSHOT_HISTORY_DIR)) {
+                screenshotHistoryPath = imagePath;
+                screenshotAssetName = originalFileName;
+            }
+
             const lastDot = originalFileName.lastIndexOf('.');
             originalExt = lastDot >= 0 ? originalFileName.slice(lastDot + 1).toLowerCase() : 'png';
             needConvertToPNG = originalExt === 'jpg' || originalExt === 'jpeg';

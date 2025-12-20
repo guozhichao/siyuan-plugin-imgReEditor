@@ -202,7 +202,12 @@ export default class PluginSample extends Plugin {
         });
 
         comp.$on('openHistory', () => {
-            this.screenshotManager.showHistoryDialog();
+            this.screenshotManager.showHistoryDialog((filePath) => {
+                // When a history item is selected, close the current editor and open the new one
+                (dialog as any)._skipDirtyCheck = true;
+                dialog.destroy();
+                this.openImageEditorDialog(filePath, null, false, true);
+            });
         });
 
         comp.$on('pin', (e) => {
