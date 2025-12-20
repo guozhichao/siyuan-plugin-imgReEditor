@@ -28,13 +28,14 @@
     let highlightedIndex = -1;
     let fontInputFocused = false;
 
-    $: filteredFonts = (fontSearch || '').trim() === ''
-        ? fonts
-        : fonts.filter(f => {
-              const text = (f.family + ' ' + (f.fullName || '')).toLowerCase();
-              const terms = fontSearch.trim().toLowerCase().split(/\s+/);
-              return terms.every(t => text.indexOf(t) !== -1);
-          });
+    $: filteredFonts =
+        (fontSearch || '').trim() === ''
+            ? fonts
+            : fonts.filter(f => {
+                  const text = (f.family + ' ' + (f.fullName || '')).toLowerCase();
+                  const terms = fontSearch.trim().toLowerCase().split(/\s+/);
+                  return terms.every(t => text.indexOf(t) !== -1);
+              });
 
     function selectFont(f: { family: string; fullName: string }) {
         emitChange({ family: f.family });
@@ -73,7 +74,7 @@
     $: if (!fontInputFocused) {
         if (settings.family) {
             const matched = fonts.find(f => f.family === settings.family);
-            fontSearch = matched ? (matched.fullName || matched.family) : settings.family;
+            fontSearch = matched ? matched.fullName || matched.family : settings.family;
         } else if (!settings.family) {
             // if no family set, clear only when not focused
             fontSearch = '';
@@ -165,7 +166,8 @@
     });
 </script>
 
-<div class="tool-settings"
+<div
+    class="tool-settings"
     on:keydown={handleInsideKey}
     on:keyup={handleInsideKey}
     on:keypress={handleInsideKey}
@@ -346,12 +348,26 @@
                     type="text"
                     placeholder="搜索字体（空格为 AND）"
                     value={fontSearch}
-                    on:input={e => { fontSearch = getValue(e); showFontDropdown = true; highlightedIndex = -1; }}
-                    on:focus={() => { showFontDropdown = true; highlightedIndex = -1; fontInputFocused = true; }}
-                    on:blur={() => { showFontDropdown = false; highlightedIndex = -1; fontInputFocused = false; }}
+                    on:input={e => {
+                        fontSearch = getValue(e);
+                        showFontDropdown = true;
+                        highlightedIndex = -1;
+                    }}
+                    on:focus={() => {
+                        showFontDropdown = true;
+                        highlightedIndex = -1;
+                        fontInputFocused = true;
+                    }}
+                    on:blur={() => {
+                        showFontDropdown = false;
+                        highlightedIndex = -1;
+                        fontInputFocused = false;
+                    }}
                     on:keydown={handleFontKeydown}
                     disabled={loadingFonts}
-                    style="width:100%; font-family: {settings.family || settings.fontFamily || (fonts[0] ? fonts[0].family : 'Microsoft Yahei')};"
+                    style="width:100%; font-family: {settings.family ||
+                        settings.fontFamily ||
+                        (fonts[0] ? fonts[0].family : 'Microsoft Yahei')};"
                 />
 
                 {#if showFontDropdown}
@@ -360,15 +376,19 @@
                             <li class="disabled">检测字体中...</li>
                         {:else}
                             {#each filteredFonts as f, i}
-                                    <li
-                                        role="option"
-                                        aria-selected={settings.family === f.family}
-                                        class:selected={settings.family === f.family}
-                                        class:highlight={i === highlightedIndex}
-                                        on:mousedown={() => selectFont(f)}
-                                    >
-                                        <span style="font-family: {f.family}">{(f.fullName && isChinese(f.fullName)) ? f.fullName : f.family}</span>
-                                    </li>
+                                <li
+                                    role="option"
+                                    aria-selected={settings.family === f.family}
+                                    class:selected={settings.family === f.family}
+                                    class:highlight={i === highlightedIndex}
+                                    on:mousedown={() => selectFont(f)}
+                                >
+                                    <span style="font-family: {f.family}">
+                                        {f.fullName && isChinese(f.fullName)
+                                            ? f.fullName
+                                            : f.family}
+                                    </span>
+                                </li>
                             {/each}
                         {/if}
                     </ul>
@@ -1054,7 +1074,6 @@
     {/if}
 </div>
 
-
 <style>
     .tool-settings {
         padding: 8px;
@@ -1140,7 +1159,7 @@
         border-radius: 6px;
         padding: 6px 0;
         z-index: 40;
-        box-shadow: 0 6px 18px rgba(0,0,0,0.08);
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
     }
     .font-dropdown li {
         list-style: none;
