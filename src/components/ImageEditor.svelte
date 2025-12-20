@@ -114,12 +114,14 @@
     }
 
     async function saveToHistory() {
-        const data = await getEditedImageData();
-        if (!data) return null;
+        // Export current canvas as PNG and save to screenshot history according to storageMode
+        if (!canvasEditorRef || typeof canvasEditorRef.toDataURL !== 'function') return null;
 
-        // Reuse existing history filename when available so repeated saves/copies
-        // for the same screenshot overwrite the same history entry instead of
-        // creating a new file every time.
+        const canvasJSON = canvasEditorRef.toJSON ? await canvasEditorRef.toJSON() : null;
+        const dataURL = await canvasEditorRef.toDataURL();
+        if (!dataURL) return null;
+
+        // Determine filename (reuse existing when possible)
         let filename: string;
         if (screenshotHistoryPath) {
             filename = screenshotHistoryPath.split('/').pop() || `screenshot-${Date.now()}.png`;
@@ -131,15 +133,66 @@
         }
         const path = `${SCREENSHOT_HISTORY_DIR}/${filename}`;
 
-        const file = new File([data.blob], filename, { type: 'image/png' });
+        // Convert dataURL to blob and insert metadata depending on mode
+        const rawBlob = dataURLToBlob(dataURL);
+        const buffer = new Uint8Array(await rawBlob.arrayBuffer());
+
+        const metaObj: any = {
+            version: 1,
+            isCanvasMode,
+            originalFileName: filename,
+            cropData: isCropped ? cropData : null,
+            originalImageDimensions:
+                settings.storageMode === 'backup'
+                    ? null
+                    : originalImageDimensions.width > 0
+                      ? originalImageDimensions
+                      : null,
+        };
+
+        if (settings.storageMode !== 'backup') {
+            metaObj.canvasJSON = canvasJSON;
+        }
+
+        // In backup mode, include the expected backup filename in PNG metadata
+        if (settings.storageMode === 'backup') {
+            metaObj.backupFileName = `${filename}.json`;
+        }
+
+        const metaValue = JSON.stringify(metaObj);
+        const newBuffer = insertPNGTextChunk(buffer, 'siyuan-plugin-imgReEditor', metaValue);
+        const newBlob = new Blob([newBuffer as any], { type: 'image/png' });
+
+        // Save image to history
+        const file = new File([newBlob], filename, { type: 'image/png' });
         await putFile(path, false, file);
 
-        // remember history path for screenshot flows so subsequent saves reuse it
+        // If backup mode, write separate JSON backup to backup dir
+        if (settings.storageMode === 'backup') {
+            try {
+                const backupName = `${filename}.json`;
+                const backupPath = `${STORAGE_BACKUP_DIR}/${backupName}`;
+                const jsonObj: any = {
+                    version: 1,
+                    canvasJSON,
+                    cropData: isCropped ? cropData : null,
+                    originalImageDimensions:
+                        originalImageDimensions.width > 0 ? originalImageDimensions : null,
+                    originalFileName: filename,
+                    backupFileName: backupName,
+                };
+                const jsonBlob = new Blob([JSON.stringify(jsonObj)], { type: 'application/json' });
+                await putFile(backupPath, false, jsonBlob);
+            } catch (e) {
+                console.warn('Failed to write screenshot backup json', e);
+            }
+        }
+
+        // remember history path and asset name
         screenshotHistoryPath = path;
-        // keep asset name in sync as well
         screenshotAssetName = filename;
 
-        return { path, blob: data.blob, dataURL: data.dataURL };
+        return { path, blob: newBlob, dataURL };
     }
 
     async function handleCopyFile() {
@@ -380,28 +433,62 @@
             }
 
             // In backup mode try to load the separate JSON file stored in backup folder
-            // (useful when canvasJSON is stored separately from the PNG)
-            if (settings.storageMode === 'backup' && hasExistingMetadata) {
+            // Try the embedded metadata's backupFileName first (if present), then fall back
+            // to a JSON file named after the current image (`originalFileName`.json).
+            if (settings.storageMode === 'backup') {
                 try {
-                    const jsonPath = `${STORAGE_BACKUP_DIR}/${originalFileName}.json`;
-                    const jb = await getFileBlob(jsonPath);
-                    if (jb && jb.size > 0) {
-                        const text = await jb.text();
+                    const expectedBackupName = `${originalFileName}.json`;
+                    const candidates: string[] = [];
+                    if (editorData && editorData.backupFileName) candidates.push(editorData.backupFileName);
+                    candidates.push(expectedBackupName);
+
+                    let loadedText: string | null = null;
+                    let loadedFrom: string | null = null;
+                    for (const bn of candidates) {
                         try {
-                            const saved = JSON.parse(text);
-                            // Merge saved canvas/crop data into editorData for restore
+                            const jsonPath = `${STORAGE_BACKUP_DIR}/${bn}`;
+                            const jb = await getFileBlob(jsonPath);
+                            if (jb && jb.size > 0) {
+                                loadedText = await jb.text();
+                                loadedFrom = bn;
+                                break;
+                            }
+                        } catch (e) {
+                            // try next candidate
+                        }
+                    }
+
+                    if (loadedText) {
+                        try {
+                            const saved = JSON.parse(loadedText);
                             if (!editorData) editorData = {};
                             if (saved.canvasJSON) editorData.canvasJSON = saved.canvasJSON;
                             if (saved.cropData) editorData.cropData = saved.cropData;
                             if (saved.originalImageDimensions)
                                 editorData.originalImageDimensions = saved.originalImageDimensions;
                             hasExistingMetadata = true;
+
+                            // If we loaded from a backup filename that doesn't match the expected one,
+                            // also write a copy to the expected path so backup filename always matches image name.
+                            if (loadedFrom && loadedFrom !== expectedBackupName) {
+                                try {
+                                    const syncPath = `${STORAGE_BACKUP_DIR}/${expectedBackupName}`;
+                                    const jsonObj = {
+                                        ...saved,
+                                        backupFileName: expectedBackupName,
+                                    };
+                                    const jsonBlob = new Blob([JSON.stringify(jsonObj)], { type: 'application/json' });
+                                    await putFile(syncPath, false, jsonBlob);
+                                } catch (e) {
+                                    console.warn('Failed to sync backup json to expected name', e);
+                                }
+                            }
                         } catch (e) {
                             console.warn('invalid json in backup json file', e);
                         }
                     }
                 } catch (e) {
-                    // ignore if backup json doesn't exist
+                    // ignore if backup json doesn't exist or other issues
                 }
             }
 
@@ -513,6 +600,12 @@
                           : null,
             };
 
+            // When using backup mode, include the backup json filename in the PNG metadata
+            if (settings.storageMode === 'backup') {
+                // backup filename should be image filename + .json
+                metaObj.backupFileName = `${saveName}.json`;
+            }
+
             // Do not embed canvasJSON into PNG metadata when using backup mode
             if (settings.storageMode !== 'backup') {
                 metaObj.canvasJSON = canvasJSON;
@@ -532,7 +625,8 @@
             if (settings.storageMode === 'backup') {
                 try {
                     // Save JSON file in backup folder with .json extension
-                    const backupJsonPath = `${STORAGE_BACKUP_DIR}/${saveName}.json`;
+                    const backupJsonName = `${saveName}.json`;
+                    const backupJsonPath = `${STORAGE_BACKUP_DIR}/${backupJsonName}`;
                     const jsonObj = {
                         version: 1,
                         canvasJSON,
@@ -540,6 +634,7 @@
                         originalImageDimensions:
                             originalImageDimensions.width > 0 ? originalImageDimensions : null,
                         originalFileName,
+                        backupFileName: backupJsonName,
                     };
                     const jsonBlob = new Blob([JSON.stringify(jsonObj)], {
                         type: 'application/json',

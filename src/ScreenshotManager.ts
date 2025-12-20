@@ -55,7 +55,7 @@ export class ScreenshotManager {
 
     public async registerShortcut() {
         this.plugin.addCommand({
-            langKey: "screenshot",
+            langKey: "screenshot.title",
             hotkey: "⇧⌘A", // Shift+Command+A default
             globalCallback: async () => {
                 const dataURL = await this.captureScreen();
@@ -66,26 +66,7 @@ export class ScreenshotManager {
         });
     }
 
-    /**
-     * Save a screenshot to the history folder
-     */
-    public async saveToHistory(dataURL: string, filename?: string) {
-        try {
-            const name = filename || `screenshot-${Date.now()}.png`;
-            const path = `data/storage/petal/siyuan-plugin-imgReEditor/screenshot_history/${name}`;
-
-            // Convert dataURL to Blob
-            const response = await fetch(dataURL);
-            const blob = await response.blob();
-            const file = new File([blob], name, { type: 'image/png' });
-
-            await putFile(path, false, file);
-            return path;
-        } catch (error) {
-            console.error('Failed to save to history:', error);
-            return null;
-        }
-    }
+    // saveToHistory removed: ImageEditor.svelte provides screenshot history handling
 
     public async showHistoryDialog() {
         const { readDir, Dialog } = await import('./api');
