@@ -2488,6 +2488,7 @@
         if (!canvas || !cropRect || !targetImageToCrop || !imageCropBackup) return;
 
         try {
+            // Get crop rect in screen/canvas coordinates
             const boundingRect = cropRect.getBoundingRect();
             const { left, top, width, height } = boundingRect;
 
@@ -2496,38 +2497,45 @@
                 return;
             }
 
-            // 1. Calculate the new crop offset within the ORIGINAL image
             // Since targetImageToCrop is currently the full original at angle 0
-            const currentScaleX = targetImageToCrop.scaleX;
-            const currentScaleY = targetImageToCrop.scaleY;
+            const currentScaleX = targetImageToCrop.scaleX || 1;
+            const currentScaleY = targetImageToCrop.scaleY || 1;
 
-            // Get the previous crop offset (relative to original image)
-            const previousOffset = (targetImageToCrop as any)._cropOffset || { x: 0, y: 0 };
+            // 1. Calculate the crop rectangle in ORIGINAL image coordinates
+            // targetImageToCrop is positioned such that its top-left correlates to the original image origin (0,0)
+            const cropX = (left - targetImageToCrop.left) / currentScaleX;
+            const cropY = (top - targetImageToCrop.top) / currentScaleY;
+            const cropW = width / currentScaleX;
+            const cropH = height / currentScaleY;
 
-            // Calculate the new offset relative to the current full image display
-            const relativeOffset = {
-                x: (left - targetImageToCrop.left) / currentScaleX,
-                y: (top - targetImageToCrop.top) / currentScaleY,
-            };
-
-            // The new offset should be the sum of previous offset and the new relative offset
-            // This ensures the offset is always relative to the ORIGINAL image, not the cropped one
-            const newOffset = {
-                x: previousOffset.x + relativeOffset.x,
-                y: previousOffset.y + relativeOffset.y,
-            };
-
-            // 2. Create baked image
+            // 2. Create baked image with ORIGINAL density (preserving resolution)
             const cropCanvas = document.createElement('canvas');
-            cropCanvas.width = width;
-            cropCanvas.height = height;
+            cropCanvas.width = Math.max(1, Math.round(cropW));
+            cropCanvas.height = Math.max(1, Math.round(cropH));
             const ctx = cropCanvas.getContext('2d');
             if (!ctx) return;
 
-            ctx.translate(-left, -top);
-            targetImageToCrop.render(ctx);
+            // Draw correctly from the source element
+            const srcElement = targetImageToCrop.getElement();
+            if (srcElement) {
+                ctx.drawImage(
+                    srcElement,
+                    cropX,
+                    cropY,
+                    cropW,
+                    cropH,
+                    0,
+                    0,
+                    cropCanvas.width,
+                    cropCanvas.height
+                );
+            } else {
+                // Fallback if element unavailable
+                ctx.translate(-cropX * currentScaleX, -cropY * currentScaleY);
+                targetImageToCrop.render(ctx);
+            }
 
-            const originalSrc = targetImageToCrop._originalSrc;
+            const originalSrc = (targetImageToCrop as any)._originalSrc;
 
             // 3. Create the new baked FabricImage
             const newImg = new FabricImage(cropCanvas, {
@@ -2537,17 +2545,17 @@
 
             // Set metadata
             (newImg as any)._originalSrc = originalSrc;
-            (newImg as any)._cropOffset = newOffset;
+            (newImg as any)._cropOffset = { x: cropX, y: cropY };
 
             // 4. Restore rotation and position
-            // The new cropped image should be positioned where the crop rect was
-            // We need to restore the original origin settings
+            // The position calculation needs to place the new image (which has size cropW * currentScaleX)
+            // exactly at the visual position 'left', 'top'.
 
-            // Calculate the position based on the original origin
+            // Calculate the position based on the original origin from backup
             let newLeft = left;
             let newTop = top;
 
-            // The crop rect is at top-left origin, but we need to convert to the original origin
+            // Adjust for origin
             if (imageCropBackup.originX === 'center') {
                 newLeft = left + width / 2;
             }
@@ -2564,7 +2572,6 @@
                 const origH = targetImageToCrop.height * currentScaleY;
                 const pivot = { x: origL + origW / 2, y: origT + origH / 2 };
 
-                // Rotate the new position around the pivot
                 const angleRad = (imageCropBackup.angle * Math.PI) / 180;
                 const rotatedPos = util.rotatePoint(
                     new Point(newLeft, newTop),
@@ -2582,8 +2589,8 @@
                 left: newLeft,
                 top: newTop,
                 angle: imageCropBackup.angle,
-                scaleX: 1,
-                scaleY: 1,
+                scaleX: currentScaleX, // Restore the scale!
+                scaleY: currentScaleY,
             });
             newImg.setCoords();
 
