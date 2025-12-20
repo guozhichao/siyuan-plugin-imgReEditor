@@ -263,12 +263,12 @@
             on:click={() => emit('save-as')}
             title="另存为"
         >
-            <svg class="icon" viewBox="0 0 24 24">
-                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
-                <polyline points="17,21 17,13 7,13 7,21" />
-                <polyline points="7,3 7,8 15,8" />
-                <path d="M12 13v4M10 15l2 2 2-2" />
-            </svg>
+        <svg class="fill-icon" viewBox="0 0 1024 1024">
+            <path
+                d="M896 960H128c-35.3 0-64-28.7-64-64V128c0-35.3 28.7-64 64-64h544l288 288v544c0 35.3-28.7 64-64 64zM128 128v768h768V416H640V128H128z"
+            />
+            <path d="M640 128l288 288v64H640z" />
+        </svg>
         </button>
         <button class="b3-button b3-button--outline" on:click={() => emit('pin')} title="贴图">
             <svg class="icon" viewBox="0 0 24 24">
@@ -290,15 +290,13 @@
         </button>
     {/if}
 
-    {#if !isScreenshotMode}
-        <button class="b3-button b3-button--outline" on:click={() => emit('save')} title="保存">
+    <button class="b3-button b3-button--outline" on:click={() => emit('save')} title="保存">
             <svg class="icon" viewBox="0 0 24 24">
                 <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
                 <polyline points="17,21 17,13 7,13 7,21" />
                 <polyline points="7,3 7,8 15,8" />
             </svg>
-        </button>
-    {/if}
+    </button>
     <button class="b3-button b3-button--outline" on:click={() => emit('cancel')} title="取消">
         <svg class="icon" viewBox="0 0 24 24">
             <path d="M18 6L6 18" />

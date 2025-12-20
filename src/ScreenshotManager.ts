@@ -1,5 +1,6 @@
 import { Plugin } from "siyuan";
-import { pushErrMsg, putFile, readDir } from "./api";
+import { pushErrMsg, putFile, readDir, removeFile, pushMsg } from "./api";
+import { confirm } from "siyuan";
 import {
     Dialog,
 } from "siyuan";
@@ -157,11 +158,16 @@ export class ScreenshotManager {
                             cursor: pointer;
                             transition: all 0.2s ease-in-out;
                             background: var(--b3-theme-surface);
+                            position: relative;
                         }
                         .screenshot-item:hover {
                             transform: translateY(-4px);
                             box-shadow: 0 4px 12px rgba(0,0,0,0.15);
                             border-color: var(--b3-theme-primary);
+                        }
+                        .screenshot-item.selected {
+                            border-color: var(--b3-theme-primary);
+                            border-width: 2px;
                         }
                         .screenshot-item img {
                             width: 100%;
@@ -191,12 +197,52 @@ export class ScreenshotManager {
                             justify-content: space-between;
                             opacity: 0.7;
                         }
+                        .screenshot-item .delete-btn {
+                            position: absolute;
+                            top: 8px;
+                            right: 8px;
+                            width: 24px;
+                            height: 24px;
+                            background: rgba(255, 69, 58, 0.8);
+                            color: white;
+                            border-radius: 4px;
+                            display: none;
+                            align-items: center;
+                            justify-content: center;
+                            transition: all 0.2s;
+                            z-index: 5;
+                        }
+                        .screenshot-item:hover .delete-btn {
+                            display: flex;
+                        }
+                        .screenshot-item .delete-btn:hover {
+                            background: rgb(255, 69, 58);
+                            transform: scale(1.1);
+                        }
+                        .screenshot-item .checkbox {
+                            position: absolute;
+                            top: 8px;
+                            left: 8px;
+                            width: 20px;
+                            height: 20px;
+                            z-index: 5;
+                            display: none;
+                        }
+                        .multi-select-mode .screenshot-item .checkbox {
+                            display: block;
+                        }
+                        .multi-select-mode .screenshot-item .delete-btn {
+                            display: none !important;
+                        }
                     </style>
                     <div class="screenshot-history-toolbar">
-                        <span style="margin-right: auto; line-height: 28px; font-weight: bold; font-size: 14px;">排序：</span>
+                        <span style="margin-right: auto; line-height: 28px; font-weight: bold; font-size: 14px;">排序与管理：</span>
+                        <button class="b3-button b3-button--outline ${multiSelectMode ? 'b3-button--primary' : ''}" id="toggle-multi-select">多选模式</button>
+                        ${multiSelectMode ? '<button class="b3-button b3-button--outline b3-button--error" id="delete-selected" disabled>删除选中</button>' : ''}
                         <button class="b3-button ${sortType === 'updated' ? '' : 'b3-button--outline'}" data-sort="updated">按更新时间</button>
                         <button class="b3-button ${sortType === 'created' ? '' : 'b3-button--outline'}" data-sort="created">按创建时间</button>
                     </div>
+                    <div class="${multiSelectMode ? 'multi-select-mode' : ''}">
                     ${groups.map(group => group.items.length > 0 ? `
                         <div class="screenshot-group-title">${group.title} (${group.items.length})</div>
                         <div class="screenshot-history-grid">
@@ -204,7 +250,11 @@ export class ScreenshotManager {
                     const createdTs = getTimestamp(file, 'created');
                     const updatedTs = getTimestamp(file, 'updated');
                     return `
-                                <div class="screenshot-item" data-path="${path}/${file.name}">
+                                <div class="screenshot-item" data-path="${path}/${file.name}" data-name="${file.name}">
+                                    <input type="checkbox" class="checkbox" ${selectedFiles.includes(`${path}/${file.name}`) ? 'checked' : ''} />
+                                    <div class="delete-btn" title="删除">
+                                        <svg style="width:14px;height:14px;"><use xlink:href="#iconTrashcan"></use></svg>
+                                    </div>
                                     <img src="${window.siyuan.config.system.workspaceDir}/${path}/${file.name}" loading="lazy" />
                                     <div class="info">
                                         <div class="name" title="${file.name}">${file.name}</div>
@@ -216,11 +266,14 @@ export class ScreenshotManager {
                 }).join('')}
                         </div>
                     ` : '').join('')}
+                    </div>
                 </div>
                 `;
             };
 
             let currentSort: 'updated' | 'created' = 'updated';
+            let multiSelectMode = false;
+            let selectedFiles: string[] = [];
 
             const dialog = new Dialog({
                 title: '截图历史',
@@ -229,23 +282,112 @@ export class ScreenshotManager {
             });
 
             const bindEvents = () => {
-                // Add event listeners to items
-                dialog.element.querySelectorAll('.screenshot-item').forEach(item => {
-                    item.addEventListener('click', () => {
-                        const filePath = item.getAttribute('data-path');
-                        if (filePath) {
-                            if (onSelect) {
-                                onSelect(filePath);
-                            } else {
-                                (this.plugin as any).openImageEditorDialog(filePath, null, false, true);
-                            }
-                            dialog.destroy();
+                // Multi-select toggle
+                const toggleBtn = dialog.element.querySelector('#toggle-multi-select');
+                if (toggleBtn) {
+                    toggleBtn.addEventListener('click', () => {
+                        multiSelectMode = !multiSelectMode;
+                        selectedFiles = [];
+                        const wrapper = dialog.element.querySelector('#screenshot-history-wrapper');
+                        if (wrapper) {
+                            wrapper.innerHTML = renderHistory(currentSort);
+                            bindEvents();
                         }
                     });
+                }
+
+                // Delete selected
+                const deleteSelectedBtn = dialog.element.querySelector('#delete-selected') as HTMLButtonElement;
+                if (deleteSelectedBtn) {
+                    deleteSelectedBtn.addEventListener('click', async () => {
+                        if (selectedFiles.length === 0) return;
+                        confirm('删除确认', `确定删除选中的 ${selectedFiles.length} 张图片吗？`, async () => {
+                            for (const filePath of selectedFiles) {
+                                await removeFile(filePath);
+                                // Also remove backup json if it exists
+                                try {
+                                    const fileName = filePath.split('/').pop();
+                                    await removeFile(`data/storage/petal/siyuan-plugin-imgReEditor/backup/${fileName}.json`);
+                                } catch (e) { }
+                            }
+                            pushMsg(`已删除 ${selectedFiles.length} 张图片`);
+                            files = await readDir(path); // refreshing
+                            const wrapper = dialog.element.querySelector('#screenshot-history-wrapper');
+                            if (wrapper) {
+                                wrapper.innerHTML = renderHistory(currentSort);
+                                bindEvents();
+                            }
+                        });
+                    });
+                }
+
+                // Add event listeners to items
+                dialog.element.querySelectorAll('.screenshot-item').forEach(item => {
+                    const filePath = item.getAttribute('data-path') || '';
+                    const checkbox = item.querySelector('.checkbox') as HTMLInputElement;
+
+                    item.addEventListener('click', (e) => {
+                        const isDeleteBtn = (e.target as HTMLElement).closest('.delete-btn');
+                        if (isDeleteBtn) {
+                            e.stopPropagation();
+                            confirm('删除确认', '确定删除这张图片吗？', async () => {
+                                await removeFile(filePath);
+                                try {
+                                    const fileName = filePath.split('/').pop();
+                                    await removeFile(`data/storage/petal/siyuan-plugin-imgReEditor/backup/${fileName}.json`);
+                                } catch (e) { }
+                                pushMsg('图片已删除');
+                                files = await readDir(path);
+                                const wrapper = dialog.element.querySelector('#screenshot-history-wrapper');
+                                if (wrapper) {
+                                    wrapper.innerHTML = renderHistory(currentSort);
+                                    bindEvents();
+                                }
+                            });
+                            return;
+                        }
+
+                        if (multiSelectMode) {
+                            if (checkbox) {
+                                checkbox.checked = !checkbox.checked;
+                                updateSelection(filePath, checkbox.checked, item);
+                            }
+                        } else {
+                            if (filePath) {
+                                if (onSelect) {
+                                    onSelect(filePath);
+                                } else {
+                                    (this.plugin as any).openImageEditorDialog(filePath, null, false, true);
+                                }
+                                dialog.destroy();
+                            }
+                        }
+                    });
+
+                    if (checkbox) {
+                        checkbox.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            updateSelection(filePath, checkbox.checked, item);
+                        });
+                    }
                 });
 
+                function updateSelection(filePath: string, selected: boolean, item: Element) {
+                    if (selected) {
+                        if (!selectedFiles.includes(filePath)) selectedFiles.push(filePath);
+                        item.classList.add('selected');
+                    } else {
+                        selectedFiles = selectedFiles.filter(f => f !== filePath);
+                        item.classList.remove('selected');
+                    }
+                    if (deleteSelectedBtn) {
+                        deleteSelectedBtn.disabled = selectedFiles.length === 0;
+                        deleteSelectedBtn.innerText = `删除选中 (${selectedFiles.length})`;
+                    }
+                }
+
                 // Add sort event listeners
-                dialog.element.querySelectorAll('.screenshot-history-toolbar button').forEach(btn => {
+                dialog.element.querySelectorAll('.screenshot-history-toolbar button[data-sort]').forEach(btn => {
                     btn.addEventListener('click', () => {
                         const sort = btn.getAttribute('data-sort') as 'updated' | 'created';
                         if (sort !== currentSort) {

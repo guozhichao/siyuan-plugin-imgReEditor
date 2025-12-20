@@ -562,6 +562,22 @@
         if (saving) return;
         saving = true;
         try {
+            if (isScreenshotMode) {
+                const result = await saveToHistory();
+                if (result) {
+                    pushMsg('图片已保存到历史');
+                    // Mark as not dirty/saved if possible
+                    if (
+                        canvasEditorRef &&
+                        typeof (canvasEditorRef as any).resetDirty === 'function'
+                    ) {
+                        (canvasEditorRef as any).resetDirty();
+                    }
+                    onClose?.(true, result.path);
+                }
+                return;
+            }
+            // ... original logic continues for standard mode
             // If there is an active or unconfirmed crop rectangle, apply it before saving
             // For Fabric mode, delegate to CanvasEditor; fallback to legacy handlers
             try {
