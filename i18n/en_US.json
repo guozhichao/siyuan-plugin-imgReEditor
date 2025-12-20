@@ -28,5 +28,18 @@
         "saveFailed": "Save failed",
         "unsavedChanges": "The image has unsaved changes. Are you sure you want to close?",
         "confirm": "Confirm"
+    },
+    "screenshot": {
+        "title": "Screenshot Editor",
+        "captureFailed": "Failed to capture screen",
+        "copySuccess": "Saved to history and copied to clipboard",
+        "saveAsSuccess": "Save as successful",
+        "history": "Screenshot History"
+    },
+    "common": {
+        "copy": "Copy",
+        "saveAs": "Save As",
+        "pin": "Pin",
+        "history": "History"
     }
 }

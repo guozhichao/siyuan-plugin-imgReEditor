@@ -7,6 +7,7 @@
     export let active: string | null = null;
     export let activeShape: string | null = null;
     export let isCanvasMode: boolean = false;
+    export let isScreenshotMode: boolean = false;
     const dispatch = createEventDispatcher();
 
     function emit(name: string, detail: any = {}) {
@@ -78,7 +79,7 @@
             on:click={() => emit('tool', { tool: 'shape', shape: 'circle' })}
             title="圆形"
         >
-            <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /></svg>
+            <svg class="icon" viewBox="0 0 12 12"><circle cx="6" cy="6" r="5" /></svg>
         </button>
     </div>
     <button
@@ -245,6 +246,49 @@
         </svg>
     </button>
     <div class="toolbar-spacer"></div>
+
+    {#if isScreenshotMode}
+        <button
+            class="b3-button b3-button--outline"
+            on:click={() => emit('copy-file')}
+            title="复制文件"
+        >
+            <svg class="icon" viewBox="0 0 24 24">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+            </svg>
+        </button>
+        <button
+            class="b3-button b3-button--outline"
+            on:click={() => emit('save-as')}
+            title="另存为"
+        >
+            <svg class="icon" viewBox="0 0 24 24">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                <polyline points="17,21 17,13 7,13 7,21" />
+                <polyline points="7,3 7,8 15,8" />
+                <path d="M12 13v4M10 15l2 2 2-2" />
+            </svg>
+        </button>
+        <button class="b3-button b3-button--outline" on:click={() => emit('pin')} title="贴图">
+            <svg class="icon" viewBox="0 0 24 24">
+                <path d="M12 2v8" />
+                <path d="M9 10l3 3 3-3" />
+                <path d="M5 21h14" />
+            </svg>
+        </button>
+        <button
+            class="b3-button b3-button--outline"
+            on:click={() => emit('history')}
+            title="截图历史"
+        >
+            <svg class="icon" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12,6 12,12 16,14" />
+            </svg>
+        </button>
+    {/if}
+
     <button class="b3-button b3-button--outline" on:click={() => emit('save')} title="保存">
         <svg class="icon" viewBox="0 0 24 24">
             <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
@@ -258,9 +302,6 @@
             <path d="M6 6l12 12" />
         </svg>
     </button>
-
-    <style>
-    </style>
 </div>
 
 <style>

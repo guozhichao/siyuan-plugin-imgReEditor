@@ -15,6 +15,7 @@
     export let blockId: string | null = null;
     export let settings: any;
     export let isCanvasMode: boolean = false;
+    export let isScreenshotMode: boolean = false;
     export let onClose: (saved: boolean, newPath?: string) => void;
 
     let imageBlob: Blob | null = null;
@@ -53,6 +54,8 @@
     // pending crop request if canvas not ready yet
     let pendingCropRequested: boolean = false;
     const STORAGE_BACKUP_DIR = 'data/storage/petal/siyuan-plugin-imgReEditor/backup';
+    const SCREENSHOT_HISTORY_DIR =
+        'data/storage/petal/siyuan-plugin-imgReEditor/screenshot_history';
 
     // Custom crop state (CanvasEditor handles crop lifecycle; ImageEditor stores metadata)
     let originalImageDimensions = { width: 0, height: 0 };
@@ -78,6 +81,132 @@
         } else {
             onClose?.(false);
         }
+    }
+
+    async function getEditedImageData() {
+        if (!canvasEditorRef) return null;
+
+        try {
+            const canvasJSON = canvasEditorRef.toJSON ? await canvasEditorRef.toJSON() : null;
+            const dataURL = await canvasEditorRef.toDataURL();
+            if (!dataURL) return null;
+
+            const blob = dataURLToBlob(dataURL);
+            const buffer = new Uint8Array(await blob.arrayBuffer());
+            const metaObj: any = {
+                version: 1,
+                isCanvasMode,
+                originalFileName,
+                cropData: isCropped ? cropData : null,
+                canvasJSON,
+            };
+            const metaValue = JSON.stringify(metaObj);
+            const newBuffer = insertPNGTextChunk(buffer, 'siyuan-plugin-imgReEditor', metaValue);
+            const newBlob = new Blob([newBuffer as any], { type: 'image/png' });
+            return { blob: newBlob, dataURL };
+        } catch (e) {
+            console.error('Failed to get edited image data', e);
+            return null;
+        }
+    }
+
+    async function saveToHistory() {
+        const data = await getEditedImageData();
+        if (!data) return null;
+
+        const timestamp = Date.now();
+        const filename = `screenshot-${timestamp}.png`;
+        const path = `${SCREENSHOT_HISTORY_DIR}/${filename}`;
+
+        const file = new File([data.blob], filename, { type: 'image/png' });
+        await putFile(path, false, file);
+        return { path, blob: data.blob, dataURL: data.dataURL };
+    }
+
+    async function handleCopyFile() {
+        const history = await saveToHistory();
+        if (!history) return;
+
+        try {
+            const { clipboard } = window.require('electron');
+            const path =
+                window.siyuan.config.system.dataDir + '/' + history.path.replace('data/', '');
+
+            // On Windows, we can use 'file-paths'
+            // But standard Electron way to "copy a file" is tricky.
+            // Some versions of SiYuan or Electron might support writing file paths.
+            // For now, let's at least copy the image to clipboard as well.
+            clipboard.writeImage(
+                window
+                    .require('electron')
+                    .nativeImage.createFromBuffer(Buffer.from(await history.blob.arrayBuffer()))
+            );
+            console.log('Copied screenshot to clipboard, file path:', path);
+
+            // Attempt to copy file path if possible
+            if (process.platform === 'win32') {
+                // This is a common trick for Windows
+                // clipboard.write({ 'text/plain': path, 'file-paths': [path] });
+                // But write() might not support file-paths in all Electron versions.
+                // We'll use ipcRenderer if SiYuan provides a bridge for this.
+            }
+
+            pushMsg('文件已保存到历史并复制到剪贴板');
+        } catch (e) {
+            console.error('Failed to copy file', e);
+            pushErrMsg('复制失败');
+        }
+    }
+
+    async function handleSaveAs() {
+        const history = await saveToHistory();
+        if (!history) return;
+
+        try {
+            const { remote } = window.require('electron');
+            const dialog = remote ? remote.dialog : null;
+
+            if (dialog) {
+                const { filePath } = await dialog.showSaveDialog({
+                    defaultPath: `screenshot-${Date.now()}.png`,
+                    filters: [{ name: 'Images', extensions: ['png'] }],
+                });
+
+                if (filePath) {
+                    const fs = window.require('fs');
+                    fs.writeFileSync(filePath, Buffer.from(await history.blob.arrayBuffer()));
+                    pushMsg('另存为成功');
+                }
+            } else {
+                // Fallback for browser or if remote is not available
+                const a = document.createElement('a');
+                a.href = history.dataURL;
+                a.download = `screenshot-${Date.now()}.png`;
+                a.click();
+            }
+        } catch (e) {
+            console.error('Save as failed', e);
+            // pushErrMsg('另存为失败');
+            // Try download fallback
+            const a = document.createElement('a');
+            a.href = history.dataURL;
+            a.download = `screenshot-${Date.now()}.png`;
+            a.click();
+        }
+    }
+
+    async function handlePin() {
+        const history = await saveToHistory();
+        if (!history) return;
+
+        dispatch('pin', { dataURL: history.dataURL });
+        onClose?.(false);
+    }
+
+    async function handleHistory() {
+        onClose?.(false); // Close current editor
+        // Open history dialog
+        dispatch('openHistory');
     }
 
     function saveToolSettings(tool: string | null, options: any) {
@@ -150,6 +279,15 @@
                 }
                 return;
             }
+
+            if (imagePath.startsWith('data:')) {
+                lastBlobURL = imagePath;
+                originalFileName = `screenshot-${Date.now()}.png`;
+                originalExt = 'png';
+                editorReady = true;
+                return;
+            }
+
             // Prepare path for getFileBlob or direct fetch: 'assets/xxx' -> backend 'data/assets/xxx'
             let blob: Blob | null = null;
             if (
@@ -645,6 +783,11 @@
                 console.warn('rotate handler failed', err);
             }
         }}
+        {isScreenshotMode}
+        on:copy-file={() => handleCopyFile()}
+        on:save-as={() => handleSaveAs()}
+        on:pin={() => handlePin()}
+        on:history={() => handleHistory()}
         on:save={() => handleSave()}
         on:cancel={() => handleCancel()}
     />

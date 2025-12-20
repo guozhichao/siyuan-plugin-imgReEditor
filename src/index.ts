@@ -10,6 +10,7 @@ import SettingPanel from "./Settings.svelte";
 import ImageEditorComponent from './components/ImageEditor.svelte';
 import { getDefaultSettings } from "./defaultSettings";
 import { setPluginInstance, t } from "./utils/i18n";
+import { ScreenshotManager } from "./ScreenshotManager";
 
 export const SETTINGS_FILE = "settings.json";
 
@@ -18,6 +19,7 @@ export const SETTINGS_FILE = "settings.json";
 export default class PluginSample extends Plugin {
     _openMenuImageHandler: any;
     settings: any;
+    screenshotManager: ScreenshotManager;
 
 
     async onload() {
@@ -34,7 +36,7 @@ export default class PluginSample extends Plugin {
 
         // 注册斜杠菜单
         this.protyleSlash = [{
-            filter: ["canvas", "huabu", "画布", "imgreeditor", "画板","图片"],
+            filter: ["canvas", "huabu", "画布", "imgreeditor", "画板", "图片"],
             id: "imgreeditor-canvas",
             html: `<div class="b3-list-item__first"><svg class="b3-list-item__graphic"><use xlink:href="#iconImage"></use></svg><span class="b3-list-item__text">${t("imageEditor.createCanvas") || '创建画布 (ImgReEditor)'}</span></div>`,
             callback: async (protyle: any, nodeElement: HTMLElement) => {
@@ -43,6 +45,10 @@ export default class PluginSample extends Plugin {
                 await this.createBlankImageAndEdit(protyle, blockID);
             },
         }];
+
+        // 初始化截图管理器
+        this.screenshotManager = new ScreenshotManager(this);
+        await this.screenshotManager.registerShortcut();
     }
 
     async onLayoutReady() {
@@ -140,21 +146,28 @@ export default class PluginSample extends Plugin {
         });
     }
 
-    async openImageEditorDialog(imagePath: string, blockID?: string | null, isCanvasMode: boolean = false, onSaveCallback?: (path: string) => void) {
+    async openImageEditorDialog(imagePath: string, blockID?: string | null, isCanvasMode: boolean = false, isScreenshotMode: boolean = false, onSaveCallback?: (path: string) => void) {
         // derive filename from path/URL and include it in the dialog title
-        const fileName = (typeof imagePath === 'string' && imagePath.length)
+        const fileName = (typeof imagePath === 'string' && imagePath.length && !imagePath.startsWith('data:'))
             ? imagePath.split('/').pop() || ''
             : '';
-        const baseTitle = isCanvasMode ? (t('imageEditor.createCanvas') || 'Create canvas') : (t('imageEditor.editImage') || 'Edit image');
+        const baseTitle = isScreenshotMode ? (t('screenshot.title') || 'Screenshot') : (isCanvasMode ? (t('imageEditor.createCanvas') || 'Create canvas') : (t('imageEditor.editImage') || 'Edit image'));
         const title = fileName ? `${baseTitle} — ${fileName}` : baseTitle;
 
         const dialog = new Dialog({
             title: title,
-            content: `<div id='ImageEditor' style='height: 90%;'></div>`,
+            content: `<div id='ImageEditor' style='height: ${isScreenshotMode ? '100vh' : '90%'};'></div>`,
             destroyCallback: () => { /* component destroyed in callback */ },
-            width: '1000px',
-            height: '700px'
+            width: isScreenshotMode ? '100vw' : '1000px',
+            height: isScreenshotMode ? '100vh' : '700px'
         });
+
+        if (isScreenshotMode) {
+            dialog.element.querySelector('.b3-dialog__container').setAttribute('style', 'max-width: 100vw !important; max-height: 100vh !important; width: 100vw; height: 100vh;');
+            dialog.element.querySelector('.b3-dialog__body').setAttribute('style', 'padding: 0; display: flex; flex-direction: column;');
+            dialog.element.querySelector('.b3-dialog__header').setAttribute('style', 'display: none;');
+        }
+
         const target = dialog.element.querySelector('#ImageEditor') as HTMLElement;
         const comp = new ImageEditorComponent({
             target,
@@ -163,6 +176,7 @@ export default class PluginSample extends Plugin {
                 blockId: blockID,
                 settings: this.settings,
                 isCanvasMode,
+                isScreenshotMode,
                 onClose: (saved: boolean, newPath?: string) => {
                     // Bypass dirty check on explicit save/cancel
                     (dialog as any)._skipDirtyCheck = true;
@@ -174,6 +188,20 @@ export default class PluginSample extends Plugin {
             }
         });
 
+        comp.$on('saveSettings', (e) => {
+            this.settings = e.detail;
+            this.saveSettings(this.settings);
+        });
+
+        comp.$on('openHistory', () => {
+            this.screenshotManager.showHistoryDialog();
+        });
+
+        comp.$on('pin', (e) => {
+            if (e.detail && e.detail.dataURL) {
+                this.screenshotManager.openSticker(e.detail.dataURL);
+            }
+        });
         // Intercept dialog destruction (e.g. clicking "X" or Esc)
         const originalDestroy = dialog.destroy.bind(dialog);
         dialog.destroy = () => {

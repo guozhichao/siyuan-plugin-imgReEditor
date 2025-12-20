@@ -38,6 +38,7 @@ interface IResReadDir {
     isDir: boolean;
     isSymlink: boolean;
     name: string;
+    updated?: number;
 }
 
 interface IResExportMdContent {
@@ -61,5 +62,10 @@ interface IResForwardProxy {
 
 interface IResExportResources {
     path: string;
+}
+
+interface IResSearchDocs {
+    id: string;
+    hPath: string;
 }
 

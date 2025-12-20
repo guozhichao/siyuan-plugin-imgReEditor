@@ -27,5 +27,18 @@
         "saveFailed": "保存失败",
         "unsavedChanges": "图片内容已修改但未保存，确定要关闭吗？",
         "confirm": "确定"
+    },
+    "screenshot": {
+        "title": "截图编辑",
+        "captureFailed": "截取屏幕失败",
+        "copySuccess": "文件已保存到历史并复制到剪贴板",
+        "saveAsSuccess": "另存为成功",
+        "history": "截图历史"
+    },
+    "common": {
+        "copy": "复制",
+        "saveAs": "另存为",
+        "pin": "贴图",
+        "history": "历史"
     }
 }
