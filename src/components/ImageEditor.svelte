@@ -44,6 +44,9 @@
     let activeShape: string | null = null;
     let tmpBlobUrl: string | null = null;
     let selectCanvasSizeMode = false;
+    // For screenshot mode: keep a stable asset name so repeated copy/save reuses same file
+    let screenshotAssetName: string | null = null;
+    let screenshotHistoryPath: string | null = null;
     // Draggable tool-popup state
     let popupPos = { x: 12, y: 44 }; // default position (will be updated on first open)
     let isDraggingPopup = false;
@@ -114,12 +117,28 @@
         const data = await getEditedImageData();
         if (!data) return null;
 
-        const timestamp = Date.now();
-        const filename = `screenshot-${timestamp}.png`;
+        // Reuse existing history filename when available so repeated saves/copies
+        // for the same screenshot overwrite the same history entry instead of
+        // creating a new file every time.
+        let filename: string;
+        if (screenshotHistoryPath) {
+            filename = screenshotHistoryPath.split('/').pop() || `screenshot-${Date.now()}.png`;
+        } else if (screenshotAssetName) {
+            filename = screenshotAssetName;
+        } else {
+            const timestamp = Date.now();
+            filename = `screenshot-${timestamp}.png`;
+        }
         const path = `${SCREENSHOT_HISTORY_DIR}/${filename}`;
 
         const file = new File([data.blob], filename, { type: 'image/png' });
         await putFile(path, false, file);
+
+        // remember history path for screenshot flows so subsequent saves reuse it
+        screenshotHistoryPath = path;
+        // keep asset name in sync as well
+        screenshotAssetName = filename;
+
         return { path, blob: data.blob, dataURL: data.dataURL };
     }
 
@@ -136,20 +155,13 @@
             // But standard Electron way to "copy a file" is tricky.
             // Some versions of SiYuan or Electron might support writing file paths.
             // For now, let's at least copy the image to clipboard as well.
-            clipboard.writeImage(
-                window
-                    .require('electron')
-                    .nativeImage.createFromBuffer(Buffer.from(await history.blob.arrayBuffer()))
+            clipboard.writeBuffer(
+                'FileNameW',
+                Buffer.concat([Buffer.from(path, 'ucs-2'), Buffer.from([0, 0])])
+
             );
             console.log('Copied screenshot to clipboard, file path:', path);
 
-            // Attempt to copy file path if possible
-            if (process.platform === 'win32') {
-                // This is a common trick for Windows
-                // clipboard.write({ 'text/plain': path, 'file-paths': [path] });
-                // But write() might not support file-paths in all Electron versions.
-                // We'll use ipcRenderer if SiYuan provides a bridge for this.
-            }
 
             pushMsg('文件已保存到历史并复制到剪贴板');
         } catch (e) {
@@ -167,31 +179,62 @@
             const dialog = remote ? remote.dialog : null;
 
             if (dialog) {
+                // Use existing screenshot name if available so Save dialog defaults match history
+                const defaultName =
+                    screenshotAssetName ||
+                    (screenshotHistoryPath ? screenshotHistoryPath.split('/').pop() : null) ||
+                    `screenshot-${Date.now()}.png`;
                 const { filePath } = await dialog.showSaveDialog({
-                    defaultPath: `screenshot-${Date.now()}.png`,
+                    defaultPath: defaultName,
                     filters: [{ name: 'Images', extensions: ['png'] }],
                 });
 
                 if (filePath) {
                     const fs = window.require('fs');
                     fs.writeFileSync(filePath, Buffer.from(await history.blob.arrayBuffer()));
+                    // Persist chosen filename so subsequent saves/copies reuse it
+                    try {
+                        const pathMod = window.require('path');
+                        const base = pathMod.basename(filePath);
+                        screenshotAssetName = base;
+                        screenshotHistoryPath = `${SCREENSHOT_HISTORY_DIR}/${base}`;
+                    } catch (e) {}
                     pushMsg('另存为成功');
                 }
             } else {
                 // Fallback for browser or if remote is not available
+                // Use the Blob (which includes embedded metadata) rather than the raw dataURL
+                const a = document.createElement('a');
+                const blobUrl = URL.createObjectURL(history.blob);
+                a.href = blobUrl;
+                const name = screenshotAssetName || `screenshot-${Date.now()}.png`;
+                a.download = name;
+                // persist name for this session
+                screenshotAssetName = name;
+                screenshotHistoryPath = `${SCREENSHOT_HISTORY_DIR}/${name}`;
+                a.click();
+                // release blob URL after a short delay
+                setTimeout(() => URL.revokeObjectURL(blobUrl), 5000);
+            }
+        } catch (e) {
+            console.error('Save as failed', e);
+            // pushErrMsg('另存为失败');
+            // Try download fallback using the embedded-blob so metadata is preserved
+            try {
+                const a = document.createElement('a');
+                const blobUrl = URL.createObjectURL(history.blob);
+                a.href = blobUrl;
+                const name = screenshotAssetName || `screenshot-${Date.now()}.png`;
+                a.download = name;
+                a.click();
+                setTimeout(() => URL.revokeObjectURL(blobUrl), 5000);
+            } catch (ex) {
+                // As a last resort, fallback to dataURL (may lose metadata)
                 const a = document.createElement('a');
                 a.href = history.dataURL;
                 a.download = `screenshot-${Date.now()}.png`;
                 a.click();
             }
-        } catch (e) {
-            console.error('Save as failed', e);
-            // pushErrMsg('另存为失败');
-            // Try download fallback
-            const a = document.createElement('a');
-            a.href = history.dataURL;
-            a.download = `screenshot-${Date.now()}.png`;
-            a.click();
         }
     }
 
