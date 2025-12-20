@@ -772,6 +772,9 @@
                 on:cropCancel={() => {
                     activeTool = null;
                 }}
+                on:toolChange={e => {
+                    activeTool = e.detail.tool;
+                }}
                 on:selection={e => {
                     try {
                         const type = e.detail?.type;

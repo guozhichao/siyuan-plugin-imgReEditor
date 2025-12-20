@@ -603,7 +603,13 @@
             }
             // Switch cursor to default when holding Ctrl (selection mode shortcut)
             if ((e.key === 'Control' || e.key === 'Meta') && canvas) {
-                if (activeTool === 'shape' || activeTool === 'arrow') {
+                if (
+                    activeTool === 'shape' ||
+                    activeTool === 'arrow' ||
+                    activeTool === 'text' ||
+                    activeTool === 'number-marker' ||
+                    activeTool === 'mosaic'
+                ) {
                     canvas.defaultCursor = 'default';
                 }
             }
@@ -616,8 +622,15 @@
             }
             // Restore tool cursor when releasing Ctrl
             if ((e.key === 'Control' || e.key === 'Meta') && canvas) {
-                if (activeTool === 'shape' || activeTool === 'arrow') {
+                if (
+                    activeTool === 'shape' ||
+                    activeTool === 'arrow' ||
+                    activeTool === 'number-marker' ||
+                    activeTool === 'mosaic'
+                ) {
                     canvas.defaultCursor = 'crosshair';
+                } else if (activeTool === 'text') {
+                    canvas.defaultCursor = 'text';
                 }
             }
         };
@@ -627,8 +640,22 @@
         // copy/paste keyboard shortcuts (Ctrl/Cmd + C / V) and Delete key
         // attach handler reference so it can be removed on destroy
         (onDocKeyShortcuts as any) = (e: KeyboardEvent) => {
-            // ignore when typing in input or textarea
             const el = e.target as HTMLElement | null;
+
+            // Handle text editing exit with Escape or Ctrl/Cmd
+            // This is placed before the input/textarea check as Fabric's host textarea will be focused
+            const activeObj = canvas?.getActiveObject();
+            const isEditingText = activeObj && (activeObj as any).isEditing;
+            if (isEditingText && (e.key === 'Escape' || e.key === 'Control' || e.key === 'Meta')) {
+                (activeObj as any).exitEditing();
+                setTool(null);
+                canvas?.requestRenderAll();
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
+
+            // ignore when typing in input or textarea
             if (
                 el &&
                 (el.tagName === 'INPUT' ||
@@ -1613,6 +1640,7 @@
 
         activeTool = tool;
         activeToolOptions = options || {};
+        dispatch('toolChange', { tool });
 
         if (tool === 'number-marker') {
             if (typeof options.nextNumber !== 'undefined') {
