@@ -534,8 +534,14 @@
                         for (const type of item.types) {
                             if (type.startsWith('image/')) {
                                 const blob = await item.getType(type);
-                                const url = URL.createObjectURL(blob);
-                                addFabricImageFromURL(url);
+                                const reader = new FileReader();
+                                reader.onload = e => {
+                                    const dataURL = e.target?.result as string;
+                                    if (dataURL) {
+                                        addFabricImageFromURL(dataURL);
+                                    }
+                                };
+                                reader.readAsDataURL(blob);
                                 return;
                             }
                         }
