@@ -2571,8 +2571,6 @@
                                     (newImg as any)._cropOffset = { x: left, y: top };
                                     (canvas as any).backgroundImage = newImg;
 
-                    
-
                                     // Reset initialRect after applying to avoid re-applying on subsequent loads if any
                                     initialRect = null;
 
