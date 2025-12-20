@@ -303,10 +303,16 @@
     }
 
     async function handlePin() {
-        const history = await saveToHistory();
-        if (!history) return;
+        let result: any = null;
+        if (isScreenshotMode) {
+            result = await saveToHistory();
+        } else {
+            result = await getEditedImageData();
+        }
 
-        dispatch('pin', { dataURL: history.dataURL });
+        if (!result) return;
+
+        dispatch('pin', { dataURL: result.dataURL });
         onClose?.(false);
     }
 
