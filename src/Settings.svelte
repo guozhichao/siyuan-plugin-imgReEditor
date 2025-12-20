@@ -4,19 +4,20 @@
     import { t } from './utils/i18n';
     import { getDefaultSettings } from './defaultSettings';
     import { pushMsg, pushErrMsg, readDir, removeFile } from './api';
-    import { confirm, Constants } from 'siyuan';
+    import { confirm, Constants, Dialog } from 'siyuan';
+    import LoadingDialog from './components/LoadingDialog.svelte';
     export let plugin;
     export const useShell = async (cmd: 'showItemInFolder' | 'openPath', filePath: string) => {
-            try {
-                const { ipcRenderer } = window.require('electron');
-                ipcRenderer.send(Constants.SIYUAN_CMD, {
-                    cmd,
-                    filePath: filePath,
-                });
-            } catch (error) {
-                await pushErrMsg('当前客户端不支持打开插件数据文件夹');
-            }
-        };
+        try {
+            const { ipcRenderer } = window.require('electron');
+            ipcRenderer.send(Constants.SIYUAN_CMD, {
+                cmd,
+                filePath: filePath,
+            });
+        } catch (error) {
+            await pushErrMsg('当前客户端不支持打开插件数据文件夹');
+        }
+    };
     // 使用动态默认设置
     let settings = { ...getDefaultSettings() };
 
@@ -61,6 +62,114 @@
                                 window.siyuan.config.system.dataDir +
                                 '/storage/petal/siyuan-plugin-imgReEditor';
                             await useShell('openPath', path);
+                        },
+                    },
+                },
+                {
+                    key: 'tidyBackup',
+                    value: '',
+                    type: 'button',
+                    title: '整理 backup 文件夹',
+                    description:
+                        '检查 backup 下的备份文件，若 assets 文件夹中不存在同名文件（去除 .json 后缀），则删除对应 backup 文件。',
+                    button: {
+                        label: '整理 backup',
+                        callback: async () => {
+                            confirm(
+                                '整理 backup 文件夹',
+                                '确认要整理 backup 文件夹吗？将删除没有对应 assets 的备份文件，此操作不可恢复。',
+                                async () => {
+                                    let loadingDialog: any;
+                                    loadingDialog = new Dialog({
+                                        title: '整理中',
+                                        content: `<div id="loadingDialogContent"></div>`,
+                                        width: '300px',
+                                        height: '150px',
+                                        disableClose: true,
+                                    });
+                                    new LoadingDialog({
+                                        target: loadingDialog.element.querySelector(
+                                            '#loadingDialogContent'
+                                        ),
+                                        props: { message: '正在整理 backup 文件夹...' },
+                                    });
+                                    try {
+                                        const backupDir =
+                                            'data/storage/petal/siyuan-plugin-imgReEditor/backup';
+                                        const assetsDir = 'data/assets';
+
+                                        const entries: any = await readDir(backupDir);
+                                        if (
+                                            !entries ||
+                                            !Array.isArray(entries) ||
+                                            entries.length === 0
+                                        ) {
+                                            await pushMsg('backup 文件夹已为空');
+                                            return;
+                                        }
+
+                                        const assetsEntries: any = await readDir(assetsDir);
+                                        const assetBasenames = new Set();
+                                        if (assetsEntries && Array.isArray(assetsEntries)) {
+                                            for (const a of assetsEntries) {
+                                                try {
+                                                    const fname =
+                                                        a.name ||
+                                                        (a.path ? a.path.split('/').pop() : '');
+                                                    if (!fname) continue;
+                                                    const parts = fname.split('.');
+                                                    const base =
+                                                        parts.slice(0, -1).join('.') || fname;
+                                                    assetBasenames.add(base);
+                                                } catch (err) {
+                                                    console.warn('parse asset name failed', err);
+                                                }
+                                            }
+                                        }
+
+                                        let removedCount = 0;
+                                        for (const e of entries) {
+                                            try {
+                                                const filePath =
+                                                    e.path ||
+                                                    (e.name ? `${backupDir}/${e.name}` : null);
+                                                if (!filePath) continue;
+                                                if (e.isDir || e.isdir || e.type === 'dir')
+                                                    continue;
+                                                const fname = e.name || filePath.split('/').pop();
+                                                if (!fname) continue;
+                                                const nameWithoutJson = fname.replace(
+                                                    /\.json$/i,
+                                                    ''
+                                                );
+                                                const baseName = nameWithoutJson.replace(
+                                                    /\.[^.]+$/i,
+                                                    ''
+                                                );
+                                                if (!assetBasenames.has(baseName)) {
+                                                    await removeFile(filePath);
+                                                    removedCount++;
+                                                }
+                                            } catch (err) {
+                                                console.warn('remove file failed', err);
+                                            }
+                                        }
+
+                                        await pushMsg(
+                                            `已整理 backup 文件夹，删除 ${removedCount} 个无对应 assets 的备份文件`
+                                        );
+                                        loadingDialog.destroy();
+                                    } catch (err) {
+                                        console.error(err);
+                                        await pushErrMsg(
+                                            '整理 backup 失败: ' +
+                                                (err && err.message ? err.message : err)
+                                        );
+                                        loadingDialog.destroy();
+                                    }
+                                },
+                                () => {}
+                            );
                         },
                     },
                 },
