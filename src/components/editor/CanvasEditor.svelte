@@ -1277,11 +1277,17 @@
                             else fp = 1;
                         }
                     } catch (e) {}
+                    let fillVal = active.fill;
+                    if (typeof fillVal === 'string' && fillVal.startsWith('rgba')) {
+                        try {
+                            fillVal = '#' + new Color(fillVal).toHex();
+                        } catch (e) {}
+                    }
                     dispatch('selection', {
                         options: {
                             stroke: active.stroke,
                             strokeWidth: active.strokeWidth,
-                            fill: active.fill,
+                            fill: fillVal,
                             fillOpacity: fp,
                         },
                         type: active.type,
@@ -1299,9 +1305,15 @@
                     // Update currentNumber state to be next to this one?
                     // Or just let user edit properties.
                     // User requirement: "Support modifying background color and number"
+                    let fillVal = active.fill;
+                    if (typeof fillVal === 'string' && fillVal.startsWith('rgba')) {
+                        try {
+                            fillVal = '#' + new Color(fillVal).toHex();
+                        } catch (e) {}
+                    }
                     dispatch('selection', {
                         options: {
-                            fill: active.fill,
+                            fill: fillVal,
                             count: (active as any).count,
                         },
                         type: 'number-marker',
@@ -3771,17 +3783,27 @@
                         if (typeof options.stroke !== 'undefined') o.set('stroke', options.stroke);
                         if (typeof options.strokeWidth !== 'undefined')
                             o.set('strokeWidth', options.strokeWidth);
-                        if (typeof options.fill !== 'undefined') {
-                            let opacity = options.fillOpacity;
-                            if (typeof opacity === 'undefined' && typeof o.fill === 'string') {
-                                // Try to preserve existing fill opacity if it's an rgba string
-                                const m = o.fill.match(/rgba\([^,]+,[^,]+,[^,]+,([^)]+)\)/);
-                                if (m && m[1]) opacity = parseFloat(m[1]);
+                        // Handle fill and fillOpacity for shapes
+                        if (
+                            typeof options.fill !== 'undefined' ||
+                            typeof options.fillOpacity !== 'undefined'
+                        ) {
+                            const currentFill = o.fill;
+                            const targetFill =
+                                typeof options.fill !== 'undefined' ? options.fill : currentFill;
+                            const targetOpacity =
+                                typeof options.fillOpacity !== 'undefined'
+                                    ? options.fillOpacity
+                                    : typeof activeToolOptions.fillOpacity !== 'undefined'
+                                      ? activeToolOptions.fillOpacity
+                                      : 1;
+
+                            if (targetFill) {
+                                // Apply opacity to the chosen fill
+                                o.set('fill', colorWithOpacity(targetFill, targetOpacity));
+                            } else {
+                                o.set('fill', null);
                             }
-                            const newFill = options.fill
-                                ? colorWithOpacity(options.fill, opacity)
-                                : null;
-                            o.set('fill', newFill);
                         }
                         // Handle custom Arrow class (extends Line but has arrowHead)
                         if (typeof options.arrowHead !== 'undefined' && 'arrowHead' in o) {

@@ -246,20 +246,22 @@
                     on:change={e => emitChange({ fill: e.detail })}
                     on:recentUpdate
                 />
-                <div style="">
-                    <label for="fill-opacity" style="width:90px;">填充透明度</label>
-                    <input
-                        id="fill-opacity"
-                        type="range"
-                        min="0"
-                        max="100"
-                        value={Math.round((settings.fillOpacity || 1) * 100)}
-                        on:input={e => emitChange({ fillOpacity: +getValue(e) / 100 })}
-                    />
-                    <span class="val">{Math.round((settings.fillOpacity || 1) * 100)}%</span>
-                </div>
             {/if}
         </div>
+        {#if settings.fill}
+            <div class="row">
+                <label for="fill-opacity">填充透明度</label>
+                <input
+                    id="fill-opacity"
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={Math.round((settings.fillOpacity || 1) * 100)}
+                    on:input={e => emitChange({ fillOpacity: +getValue(e) / 100 })}
+                />
+                <span class="val">{Math.round((settings.fillOpacity || 1) * 100)}%</span>
+            </div>
+        {/if}
     {:else if tool === 'brush'}
         <div class="row">
             <label for="brush-color">颜色</label>
