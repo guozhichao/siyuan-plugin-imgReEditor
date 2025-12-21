@@ -242,8 +242,7 @@
         const history = await saveToHistory();
         if (!history) return;
 
-        const path =
-            window.siyuan.config.system.dataDir + '/' + history.path.replace('data/', '');
+        const path = window.siyuan.config.system.dataDir + '/' + history.path.replace('data/', '');
 
         try {
             await copyFileToClipboard(path);
