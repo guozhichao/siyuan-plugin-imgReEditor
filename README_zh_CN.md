@@ -114,7 +114,7 @@ MIT License
 ```bash
 pnpm install
 pnpm run dev
-```.js
+```
 
 ## 🙏 致谢
 
