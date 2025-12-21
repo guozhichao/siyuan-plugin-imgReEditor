@@ -242,26 +242,70 @@
         const history = await saveToHistory();
         if (!history) return;
 
+        const path =
+            window.siyuan.config.system.dataDir + '/' + history.path.replace('data/', '');
+
         try {
-            const { clipboard } = window.require('electron');
-            const path =
-                window.siyuan.config.system.dataDir + '/' + history.path.replace('data/', '');
-
-            // On Windows, we can use 'file-paths'
-            // But standard Electron way to "copy a file" is tricky.
-            // Some versions of SiYuan or Electron might support writing file paths.
-            // For now, let's at least copy the image to clipboard as well.
-            clipboard.writeBuffer(
-                'FileNameW',
-                Buffer.concat([Buffer.from(path, 'ucs-2'), Buffer.from([0, 0])])
-            );
-            console.log('Copied screenshot to clipboard, file path:', path);
-
+            await copyFileToClipboard(path);
             pushMsg('文件已保存到历史并复制到剪贴板');
         } catch (e) {
             console.error('Failed to copy file', e);
             pushErrMsg('复制失败');
         }
+    }
+
+    /**
+     * 跨平台复制文件到剪贴板
+     * 支持 macOS(mac)、Windows(win32)、其他（尝试写入 FileNameW 或回退为文本路径）
+     * @param filePath 绝对文件路径
+     */
+    function copyFileToClipboard(filePath: string): Promise<void> {
+        return new Promise((resolve, reject) => {
+            try {
+                const fs = window.require('fs');
+                if (!fs.existsSync(filePath)) {
+                    console.error('File does not exist:', filePath);
+                    return reject(new Error('File not found'));
+                }
+
+                const { clipboard } = window.require('electron');
+                const platform = process.platform;
+
+                if (platform === 'darwin') {
+                    const { exec } = window.require('child_process');
+                    const esc = filePath.replace(/"/g, '\\"');
+                    const scriptStr = `osascript -e 'set the clipboard to POSIX file "${esc}"'`;
+                    exec(scriptStr, (err: any) => {
+                        if (err) return reject(err);
+                        resolve();
+                    });
+                } else if (platform === 'win32') {
+                    const { exec } = window.require('child_process');
+                    // PowerShell Set-Clipboard -Path requires proper quoting; escape single quotes
+                    const escaped = filePath.replace(/'/g, "''");
+                    const scriptStr = `powershell -Command "& {Set-Clipboard -Path '${escaped}'}"`;
+                    exec(scriptStr, (err: any) => {
+                        if (err) return reject(err);
+                        resolve();
+                    });
+                } else {
+                    // Linux / other: try writing FileNameW (utf16le). If fails, fallback to plain text path.
+                    try {
+                        clipboard.writeBuffer('FileNameW', Buffer.from(filePath, 'utf16le'));
+                        resolve();
+                    } catch (e) {
+                        try {
+                            clipboard.writeText(filePath);
+                            resolve();
+                        } catch (ex) {
+                            reject(ex);
+                        }
+                    }
+                }
+            } catch (err) {
+                reject(err);
+            }
+        });
     }
 
     async function handleSaveAs() {
