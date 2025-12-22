@@ -1,6 +1,7 @@
 插件 Github 地址：https://github.com/Achuan-2/siyuan-plugin-image-editor
 
-<img width="2412" height="807" alt="image" src="https://github.com/user-attachments/assets/1da35252-d24a-4e7f-9c2c-f34859617602" />
+<img width="2403" height="804" alt="image" src="https://github.com/user-attachments/assets/2cc174a4-3e4f-4b8c-9e71-6117e2baf101" />
+
 
 
 ## 📝更新日志
