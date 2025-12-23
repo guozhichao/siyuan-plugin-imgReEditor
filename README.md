@@ -111,7 +111,7 @@
 
 ## 📄 许可证
 
-MIT License
+AGPL v3.0 License
 
 
 ## 🔧 如何打包插件
