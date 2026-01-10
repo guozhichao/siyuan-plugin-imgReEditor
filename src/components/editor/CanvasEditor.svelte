@@ -608,7 +608,6 @@
             const e = opt.e as MouseEvent;
             const button =
                 opt.button || (e.button === 2 ? 3 : e.button === 0 ? 1 : e.button === 1 ? 2 : 0);
-            console.log('mouse:down', button, opt.target?.type, 'e.button:', e.button);
 
             // Close context menu on left click
             if (button === 1 || e.button === 0) {
@@ -619,12 +618,6 @@
             // Handle right click (button === 3 or e.button === 2)
             if (button === 3 || e.button === 2) {
                 const target = opt.target;
-                console.log(
-                    'right click on:',
-                    target?.type,
-                    'isEditable:',
-                    target && isEditableObject(target)
-                );
                 if (target && isEditableObject(target)) {
                     e.preventDefault();
                     e.stopPropagation();
