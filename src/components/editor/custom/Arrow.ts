@@ -48,30 +48,81 @@ const lineActionHandler = (
     const { target, corner } = transform;
     const line = target as any;
 
+    // Get current canvas positions of both endpoints
+    const matrix = line.calcTransformMatrix();
+    const centerX = (line.x1 + line.x2) / 2;
+    const centerY = (line.y1 + line.y2) / 2;
+
+    const p1Local = new Point(line.x1 - centerX, line.y1 - centerY);
+    const p2Local = new Point(line.x2 - centerX, line.y2 - centerY);
+
+    const p1Canvas = util.transformPoint(p1Local, matrix);
+    const p2Canvas = util.transformPoint(p2Local, matrix);
+
+    // Update the canvas position of the dragged endpoint
     if (corner === 'p1') {
-        line.set({ x1: x, y1: y });
+        p1Canvas.x = x;
+        p1Canvas.y = y;
     } else {
-        line.set({ x2: x, y2: y });
+        p2Canvas.x = x;
+        p2Canvas.y = y;
     }
+
+    // Recalculate line properties from the two canvas endpoints
+    // Set new x1, y1, x2, y2 as if creating a new line
+    line.set({
+        x1: p1Canvas.x,
+        y1: p1Canvas.y,
+        x2: p2Canvas.x,
+        y2: p2Canvas.y,
+        left: undefined,
+        top: undefined,
+    });
 
     // Recalculate width, height and position
     if (typeof line._setWidthHeight === 'function') {
         line._setWidthHeight();
     }
 
+    line.setCoords();
     line.set('dirty', true);
     return true;
 };
 
 // Custom position handlers to map controls to x1,y1 and x2,y2
 function p1PositionHandler(_dim: any, finalMatrix: any, fabricObject: any) {
-    const p = fabricObject.calcLinePoints();
-    return util.transformPoint({ x: p.x1, y: p.y1 } as Point, finalMatrix);
+    // For Line objects, x1/y1 are relative to the object's own coordinate system
+    // We need to transform them considering the object's center point
+    const line = fabricObject as any;
+    const centerX = (line.x1 + line.x2) / 2;
+    const centerY = (line.y1 + line.y2) / 2;
+    const localPoint = new Point(line.x1 - centerX, line.y1 - centerY);
+    return util.transformPoint(localPoint, finalMatrix);
 }
 
 function p2PositionHandler(_dim: any, finalMatrix: any, fabricObject: any) {
-    const p = fabricObject.calcLinePoints();
-    return util.transformPoint({ x: p.x2, y: p.y2 } as Point, finalMatrix);
+    // For Line objects, x2/y2 are relative to the object's own coordinate system
+    const line = fabricObject as any;
+    const centerX = (line.x1 + line.x2) / 2;
+    const centerY = (line.y1 + line.y2) / 2;
+    const localPoint = new Point(line.x2 - centerX, line.y2 - centerY);
+    return util.transformPoint(localPoint, finalMatrix);
+}
+
+// Delete control position handler - positioned above the second endpoint
+function deletePositionHandler(_dim: any, finalMatrix: any, fabricObject: any) {
+    const line = fabricObject as any;
+    const centerX = (line.x1 + line.x2) / 2;
+    const centerY = (line.y1 + line.y2) / 2;
+
+    // Position at p2 endpoint
+    const localPoint = new Point(line.x2 - centerX, line.y2 - centerY);
+    const canvasPoint = util.transformPoint(localPoint, finalMatrix);
+
+    // Offset upward by 30 pixels
+    canvasPoint.y -= 30;
+
+    return canvasPoint;
 }
 
 export type ArrowHeadType = 'none' | 'left' | 'right' | 'both';
@@ -130,10 +181,10 @@ export class Arrow extends Line {
                     positionHandler: p2PositionHandler,
                 }),
                 deleteControl: new Control({
-                    x: 0.5,
-                    y: -0.5,
-                    offsetY: -16,
-                    offsetX: 16,
+                    x: 0,
+                    y: 0,
+                    offsetY: 0,
+                    offsetX: 0,
                     cursorStyle: 'pointer',
                     mouseUpHandler: (_eventData, transform: any) => {
                         const target = transform.target;
@@ -145,6 +196,7 @@ export class Arrow extends Line {
                         return true;
                     },
                     render: createIconRenderer(delImgIcon, 24, 24),
+                    positionHandler: deletePositionHandler,
                     sizeX: 24,
                     sizeY: 24,
                 }),
