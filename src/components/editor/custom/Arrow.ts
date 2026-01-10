@@ -243,7 +243,7 @@ export class Arrow extends Line {
                         const now = Date.now();
                         const lastClick = arrow._lastCenterControlClick || 0;
                         const timeDiff = now - lastClick;
-                        
+
                         if (timeDiff < 300) {
                             // Double click detected - reset to straight line
                             arrow.controlOffsetX = 0;
@@ -256,7 +256,7 @@ export class Arrow extends Line {
                             arrow._lastCenterControlClick = 0; // Reset
                             return true;
                         }
-                        
+
                         arrow._lastCenterControlClick = now;
                         return false;
                     },
@@ -537,71 +537,71 @@ export class Arrow extends Line {
     containsPoint(point: Point): boolean {
         // Check if the arrow is curved
         const isCurved = Math.abs(this.controlOffsetX) > 0.1 || Math.abs(this.controlOffsetY) > 0.1;
-        
+
         if (!isCurved) {
             // For straight arrows, use default line hit detection
             return super.containsPoint(point);
         }
-        
+
         // For curved arrows, check distance to bezier curve
         const visualStrokeWidth = this.getVisualStrokeWidth();
         const threshold = Math.max(visualStrokeWidth / 2 + 5, 10); // Hit area threshold
-        
+
         // Transform point to local coordinates
         const localPoint = util.transformPoint(
             point,
             util.invertTransform(this.calcTransformMatrix())
         );
-        
+
         // Scale local point to match the scaled coordinate system
         const scaledLocalX = localPoint.x * this.scaleX;
         const scaledLocalY = localPoint.y * this.scaleY;
-        
+
         // Calculate curve parameters
         const localXDiff = this.x2 - this.x1;
         const localYDiff = this.y2 - this.y1;
         const localAngle = Math.atan2(localYDiff, localXDiff);
         const visualLength = Math.sqrt(
-            Math.pow(localXDiff * this.scaleX, 2) + 
+            Math.pow(localXDiff * this.scaleX, 2) +
             Math.pow(localYDiff * this.scaleY, 2)
         );
-        
+
         // Transform control point to rotated coordinate system
         const cosA = Math.cos(-localAngle);
         const sinA = Math.sin(-localAngle);
-        const rotatedControlX = this.controlOffsetX * this.scaleX * cosA - 
-                                this.controlOffsetY * this.scaleY * sinA;
-        const rotatedControlY = this.controlOffsetX * this.scaleX * sinA + 
-                                this.controlOffsetY * this.scaleY * sinA;
-        
+        const rotatedControlX = this.controlOffsetX * this.scaleX * cosA -
+            this.controlOffsetY * this.scaleY * sinA;
+        const rotatedControlY = this.controlOffsetX * this.scaleX * sinA +
+            this.controlOffsetY * this.scaleY * sinA;
+
         // Rotate the test point to align with the curve's coordinate system
         const rotatedX = scaledLocalX * cosA - scaledLocalY * sinA;
         const rotatedY = scaledLocalX * sinA + scaledLocalY * cosA;
-        
+
         // Sample points along the quadratic bezier curve
         const samples = 20;
         let minDistance = Infinity;
-        
+
         for (let i = 0; i <= samples; i++) {
             const t = i / samples;
             // Quadratic bezier formula: P(t) = (1-t)²P0 + 2(1-t)tP1 + t²P2
             const curveX = Math.pow(1 - t, 2) * (-visualLength / 2) +
-                          2 * (1 - t) * t * rotatedControlX +
-                          Math.pow(t, 2) * (visualLength / 2);
+                2 * (1 - t) * t * rotatedControlX +
+                Math.pow(t, 2) * (visualLength / 2);
             const curveY = 2 * (1 - t) * t * rotatedControlY;
-            
+
             const dx = rotatedX - curveX;
             const dy = rotatedY - curveY;
             const distance = Math.sqrt(dx * dx + dy * dy);
-            
+
             if (distance < minDistance) {
                 minDistance = distance;
             }
         }
-        
+
         return minDistance <= threshold;
     }
-    
+
     /**
      * Override toObject to include custom properties
      */
