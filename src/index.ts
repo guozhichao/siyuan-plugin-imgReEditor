@@ -356,10 +356,16 @@ export default class PluginSample extends Plugin {
             // 动态导入 PNG 元数据工具
             const { insertPNGTextChunk } = await import('./utils');
 
-            // 创建一个带有灰色背景和文字的PNG图片
+            // Use saved settings or defaults
+            const savedCanvas = (this.settings && this.settings.lastToolSettings && this.settings.lastToolSettings.canvas) || {};
+            const canvasW = savedCanvas.width || 800;
+            const canvasH = savedCanvas.height || 600;
+            const bgFill = savedCanvas.fill || '#ffffff';
+
+            // 创建一个带有背景的PNG图片
             const canvas = document.createElement('canvas');
-            canvas.width = 800;
-            canvas.height = 600;
+            canvas.width = canvasW;
+            canvas.height = canvasH;
             const ctx = canvas.getContext('2d');
 
             if (!ctx) {
@@ -367,8 +373,14 @@ export default class PluginSample extends Plugin {
                 return;
             }
 
-            // 灰色背景
-            ctx.fillStyle = '#f0f0f0';
+            // 背景
+            if (bgFill.startsWith('linear-gradient')) {
+                // For simplicity, use first color of gradient for the initial blank image background
+                const match = bgFill.match(/#(?:[0-9a-fA-F]{3}){1,2}/);
+                ctx.fillStyle = match ? match[0] : '#ffffff';
+            } else {
+                ctx.fillStyle = bgFill;
+            }
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
             // 黑色文字

@@ -948,7 +948,9 @@
                 canvasEditorRef.setTool('transform');
                 toolSettings = canvasEditorRef.getToolOptions();
             } else if (t === 'canvas') {
-                canvasEditorRef.setTool('canvas');
+                const savedOptions =
+                    (settings.lastToolSettings && settings.lastToolSettings['canvas']) || {};
+                canvasEditorRef.setTool('canvas', savedOptions);
                 activeTool = 'canvas';
                 toolSettings = canvasEditorRef.getToolOptions();
             } else if (t === 'image-border') {
@@ -1069,6 +1071,7 @@
                 fileName={originalFileName}
                 {isCanvasMode}
                 {initialRect}
+                {settings}
                 on:ready={() => {
                     editorReady = true;
 
@@ -1170,6 +1173,8 @@
                                 width: nw,
                                 height: nh,
                             };
+                            // Persist settings for the canvas tool
+                            saveToolSettings('canvas', toolSettings);
                             // Re-apply after a short delay to avoid being overwritten by selection handlers
                             setTimeout(() => {
                                 try {
@@ -1580,12 +1585,15 @@
         width: 100%;
         height: 100%;
         overflow: hidden; /* prevent scrollbars when toolbar is overlaid */
+        display: flex;
+        flex-direction: column;
     }
 
     .editor-main {
         display: flex;
         width: 100%;
-        height: 100%;
+        flex: 1 1 0;
+        min-height: 0;
         align-items: stretch;
     }
     .canvas-wrap {

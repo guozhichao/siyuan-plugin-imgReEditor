@@ -36,6 +36,7 @@
     export let blobURL: string | null = null;
     export let isCanvasMode = false;
     export let initialRect: { x: number; y: number; width: number; height: number } | null = null;
+    export let settings: any = {};
 
     // active tool state
     let activeTool: string | null = null;
@@ -2962,9 +2963,12 @@
         if (!canvas) return;
         currentNumber = 1;
         if (!url && isCanvasMode) {
-            // Default project size
-            const imgW = 800;
-            const imgH = 600;
+            // Use saved settings or defaults
+            const savedCanvas =
+                (settings && settings.lastToolSettings && settings.lastToolSettings.canvas) || {};
+            const imgW = savedCanvas.width || 800;
+            const imgH = savedCanvas.height || 600;
+            const bgFill = savedCanvas.fill || '#ffffff';
 
             // Get the workspace container size
             const workspace = container.closest('.canvas-editor');
@@ -2995,10 +2999,14 @@
             boundaryRect.set('_isCanvasBoundary', true);
             canvas.add(boundaryRect);
 
-            // Set initial white background rectangle for export
-            setCanvasBackground('#ffffff');
+            // Set initial background rectangle for export
+            setCanvasBackground(bgFill);
 
             canvas.requestRenderAll();
+            setTimeout(() => {
+                fitImageToViewport();
+                dispatch('loaded', { width: imgW, height: imgH, name: name || 'canvas' });
+            }, 50);
 
             imageLoaded = true;
             try {
@@ -3149,14 +3157,20 @@
         const workspace = container.closest('.canvas-editor');
         if (!workspace) return;
 
+        // Use a small timeout or requestAnimationFrame to ensure DOM is updated
         const cw = workspace.clientWidth;
         const ch = workspace.clientHeight;
+
+        if (cw <= 0 || ch <= 0) {
+            // If workspace is not yet sized, retry in a moment
+            setTimeout(() => fitImageToViewport(), 100);
+            return;
+        }
+
         const w = canvas.getWidth();
         const h = canvas.getHeight();
 
         // For canvas mode, we now use "Artboard Mode" (Fabric Viewport) to allow panning/zooming
-        // Check if canvas dimensions match workspace (Uncropped / Artboard mode / Canvas mode)
-        // or if we have a custom size (Cropped / True Resolution mode)
         const isCustomSize = !isCanvasMode && (Math.abs(w - cw) > 2 || Math.abs(h - ch) > 2);
 
         if (isCustomSize) {
@@ -3176,12 +3190,13 @@
                     containerEl.style.marginTop = '0px';
                 }
             }
-            updateZoomDisplay();
-            canvas.requestRenderAll();
         } else {
             // Artboard Mode: Zoom the content to fit
-            canvas.setDimensions({ width: cw, height: ch });
-            canvas.setDimensions({ width: cw, height: ch }, { cssOnly: true });
+            // Ensure canvas matches workspace size
+            if (w !== cw || h !== ch) {
+                canvas.setDimensions({ width: cw, height: ch });
+                canvas.setDimensions({ width: cw, height: ch }, { cssOnly: true });
+            }
 
             const containerEl = canvas.getElement().parentNode as HTMLElement;
             if (containerEl && containerEl.classList.contains('canvas-container')) {
@@ -3190,18 +3205,26 @@
             }
 
             const bg = canvas.backgroundImage;
+            // Robust boundary finding
             const boundary = isCanvasMode
-                ? canvas.getObjects().find((o: any) => o._isCanvasBoundary)
+                ? canvas.getObjects().find((o: any) => (o as any)._isCanvasBoundary)
                 : null;
 
             if (bg || boundary) {
-                // Get the actual bounding box of the background image or canvas boundary
-                let boundingRect = bg ? bg.getBoundingRect() : boundary!.getBoundingRect();
+                // Use logical dimensions for centering to avoid issues with current transform
+                let imgW, imgH, imgCenterX, imgCenterY;
 
-                const imgW = boundingRect.width;
-                const imgH = boundingRect.height;
-                const imgCenterX = boundingRect.left + imgW / 2;
-                const imgCenterY = boundingRect.top + imgH / 2;
+                if (bg) {
+                    imgW = (bg.width || 0) * (bg.scaleX || 1);
+                    imgH = (bg.height || 0) * (bg.scaleY || 1);
+                    imgCenterX = (bg.left || 0) + imgW / 2;
+                    imgCenterY = (bg.top || 0) + imgH / 2;
+                } else {
+                    imgW = (boundary as any).width * ((boundary as any).scaleX || 1);
+                    imgH = (boundary as any).height * ((boundary as any).scaleY || 1);
+                    imgCenterX = (boundary as any).left + imgW / 2;
+                    imgCenterY = (boundary as any).top + imgH / 2;
+                }
 
                 if (imgW > 0 && imgH > 0) {
                     const scale = Math.min(cw / imgW, ch / imgH, 1) * 0.98;
@@ -3211,9 +3234,9 @@
                     canvas.setViewportTransform([scale, 0, 0, scale, tx, ty]);
                 }
             }
-            updateZoomDisplay();
-            canvas.requestRenderAll();
         }
+        updateZoomDisplay();
+        canvas.requestRenderAll();
     }
 
     async function updateImageBorder(options: any) {
