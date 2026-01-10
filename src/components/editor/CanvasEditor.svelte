@@ -570,6 +570,7 @@
 
     onMount(() => {
         canvas = new Canvas(container, {
+            selectionColor: 'transparent',
             selection: true,
             preserveObjectStacking: true,
             renderOnAddRemove: true,
