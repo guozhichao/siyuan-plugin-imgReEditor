@@ -945,13 +945,24 @@
                         return;
                     } catch (e) {}
                 }
-                // If hit a non-arrow object, clear selection to prevent moving it
+                // If hit a non-arrow object (including images), clear selection and prevent default interaction
+                // This prevents moving images or other objects when drawing arrows
                 if (hit) {
                     try {
                         canvas.discardActiveObject();
                         canvas.requestRenderAll();
                     } catch (e) {}
                 }
+                // Clear any active object to ensure new drawing can start
+                try {
+                    const current = canvas.getActiveObject && canvas.getActiveObject();
+                    if (current) {
+                        try {
+                            canvas.discardActiveObject();
+                            canvas.requestRenderAll();
+                        } catch (e) {}
+                    }
+                } catch (e) {}
 
                 arrowStart = { x: pointer.x, y: pointer.y };
                 // Create temporary arrow using custom Arrow class
@@ -1835,6 +1846,33 @@
             else if (tool === 'number-marker') canvas.defaultCursor = 'crosshair';
             else if (tool === 'hand') canvas.defaultCursor = 'grab';
             else canvas.defaultCursor = 'default';
+        }
+
+        // Manage object interactivity based on active tool
+        // For drawing tools (shape, arrow, mosaic, number-marker), disable image interactivity
+        if (canvas) {
+            const drawingTools = ['shape', 'arrow', 'mosaic', 'number-marker'];
+            const isDrawingTool = drawingTools.includes(tool || '');
+            
+            canvas.getObjects().forEach((obj: any) => {
+                // Skip special objects
+                if (obj._isCanvasBoundary || obj._isCanvasBackground) return;
+                
+                // For image objects, control their interactivity based on tool
+                if (obj.type === 'image') {
+                    if (isDrawingTool) {
+                        // Disable image interaction for drawing tools
+                        obj.selectable = false;
+                        obj.evented = false;
+                    } else {
+                        // Re-enable image interaction for other tools
+                        obj.selectable = true;
+                        obj.evented = true;
+                    }
+                }
+            });
+            
+            canvas.requestRenderAll();
         }
 
         // configure brush mode
