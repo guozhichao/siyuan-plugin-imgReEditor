@@ -125,6 +125,62 @@ function deletePositionHandler(_dim: any, finalMatrix: any, fabricObject: any) {
     return canvasPoint;
 }
 
+// Center control point position handler for curve control
+function centerControlPositionHandler(_dim: any, finalMatrix: any, fabricObject: any) {
+    const arrow = fabricObject as any;
+
+    // For quadratic bezier curve, the visual control point should be at t=0.5
+    // B(0.5) = 0.25*P0 + 0.5*P1 + 0.25*P2
+    // where P0 = (-length/2, 0), P1 = (controlOffsetX, controlOffsetY), P2 = (length/2, 0)
+    // in local coordinates
+
+    // Calculate the position on the curve at t=0.5
+    const t = 0.5;
+    const localX = arrow.controlOffsetX * 2 * t * (1 - t);
+    const localY = arrow.controlOffsetY * 2 * t * (1 - t);
+
+    const localPoint = new Point(localX, localY);
+    return util.transformPoint(localPoint, finalMatrix);
+}
+
+// Action handler for center control point
+const centerControlActionHandler = (
+    _eventData: TPointerEvent,
+    transform: Transform,
+    x: number,
+    y: number
+) => {
+    const { target } = transform;
+    const arrow = target as any;
+
+    // Convert canvas position to local coordinates relative to arrow center
+    const matrix = arrow.calcTransformMatrix();
+    const invertedMatrix = util.invertTransform(matrix);
+    const canvasPoint = new Point(x, y);
+    const localPoint = util.transformPoint(canvasPoint, invertedMatrix);
+
+    // The user is dragging the point on the curve at t=0.5
+    // For quadratic bezier: B(0.5) = 0.25*P0 + 0.5*P1 + 0.25*P2
+    // In our case: P0 = (0,0) - center, P2 = (0,0) - center (symmetric)
+    // So: B(0.5) = 0.5*P1
+    // Therefore: P1 = 2 * B(0.5)
+    // But we need to account for the fact that the curve formula is:
+    // B(t) = (1-t)²*P0 + 2(1-t)t*P1 + t²*P2
+    // At t=0.5: B(0.5) = 0.25*P0 + 0.5*P1 + 0.25*P2
+    // Since P0 and P2 are at (-length/2, 0) and (length/2, 0):
+    // The X components cancel out for the offset
+    // localPoint is where the user wants the curve to pass through
+    // We need: localPoint = 2 * (1-t) * t * controlOffset at t=0.5
+    // So: controlOffset = localPoint / (2 * 0.5 * 0.5) = localPoint / 0.5 = 2 * localPoint
+
+    arrow.controlOffsetX = localPoint.x * 2;
+    arrow.controlOffsetY = localPoint.y * 2;
+
+    arrow.setCoords();
+    arrow.set('dirty', true);
+    return true;
+};
+
 export type ArrowHeadType = 'none' | 'left' | 'right' | 'both';
 export type ArrowHeadStyle = 'sharp' | 'swallowtail' | 'sharp-hollow' | 'swallowtail-hollow';
 export type ArrowLineStyle = 'solid' | 'dashed' | 'dotted' | 'dash-dot';
@@ -136,6 +192,8 @@ interface ArrowOptions extends TOptions<FabricObjectProps> {
     lineStyle?: ArrowLineStyle;
     thicknessStyle?: ArrowThicknessStyle;
     useCustomSelection?: boolean;
+    controlOffsetX?: number;
+    controlOffsetY?: number;
 }
 
 /**
@@ -149,6 +207,8 @@ export class Arrow extends Line {
     lineStyle: ArrowLineStyle;
     thicknessStyle: ArrowThicknessStyle;
     useCustomSelection: boolean;
+    controlOffsetX: number;
+    controlOffsetY: number;
 
     constructor(points: [number, number, number, number], options?: ArrowOptions) {
         super(points, options);
@@ -162,6 +222,10 @@ export class Arrow extends Line {
         this.strokeLineJoin = 'round';
         this.objectCaching = false;
         this.hasBorders = !this.useCustomSelection;
+
+        // Initialize control point offset at 0 (on the line, straight arrow by default)
+        this.controlOffsetX = options?.controlOffsetX ?? 0;
+        this.controlOffsetY = options?.controlOffsetY ?? 0;
 
         if (this.useCustomSelection) {
             // Define custom controls for arrow endpoints
@@ -179,6 +243,25 @@ export class Arrow extends Line {
                     actionName: 'modifyLine',
                     render: createIconRenderer(edgeImgIcon, 25, 25),
                     positionHandler: p2PositionHandler,
+                }),
+                centerControl: new Control({
+                    actionHandler: centerControlActionHandler,
+                    cursorStyleHandler: controlsUtils.scaleCursorStyleHandler,
+                    actionName: 'modifyCurve',
+                    render: (ctx: CanvasRenderingContext2D, left: number, top: number) => {
+                        const size = 12;
+                        ctx.save();
+                        ctx.translate(left, top);
+                        ctx.beginPath();
+                        ctx.arc(0, 0, size / 2, 0, 2 * Math.PI);
+                        ctx.fillStyle = '#4285f4';
+                        ctx.fill();
+                        ctx.strokeStyle = '#ffffff';
+                        ctx.lineWidth = 2;
+                        ctx.stroke();
+                        ctx.restore();
+                    },
+                    positionHandler: centerControlPositionHandler,
                 }),
                 deleteControl: new Control({
                     x: 0,
@@ -332,16 +415,51 @@ export class Arrow extends Line {
             this.thicknessStyle === 'varying' &&
             (this.arrowHead === 'left' || this.arrowHead === 'right');
 
+        // Calculate control point in the rotated coordinate system
+        // controlOffsetX/Y are already relative to center (0,0)
+        const controlXLocal = this.controlOffsetX;
+        const controlYLocal = this.controlOffsetY;
+
+        // Transform control point to match the rotated canvas
+        const cosA = Math.cos(-visualAngle);
+        const sinA = Math.sin(-visualAngle);
+        const rotatedControlX = controlXLocal * this.scaleX * cosA - controlYLocal * this.scaleY * sinA;
+        const rotatedControlY = controlXLocal * this.scaleX * sinA + controlYLocal * this.scaleY * cosA;
+
+        // Check if the arrow is curved (control point is not on the line)
+        const isCurved = Math.abs(rotatedControlY) > 0.1;
+
         if (isVarying) {
             // Draw tapered line as a filled polygon
             const startWidth = this.arrowHead === 'right' ? visualStrokeWidth * 0.2 : visualStrokeWidth;
             const endWidth = this.arrowHead === 'right' ? visualStrokeWidth : visualStrokeWidth * 0.2;
 
             ctx.beginPath();
-            ctx.moveTo(-visualLength / 2, -startWidth / 2);
-            ctx.lineTo(visualLength / 2, -endWidth / 2);
-            ctx.lineTo(visualLength / 2, endWidth / 2);
-            ctx.lineTo(-visualLength / 2, startWidth / 2);
+            if (isCurved) {
+                // For curved varying thickness, approximate with line segments
+                const steps = 20;
+                for (let i = 0; i <= steps; i++) {
+                    const t = i / steps;
+                    const x = -visualLength / 2 * (1 - t) * (1 - t) + rotatedControlX * 2 * (1 - t) * t + visualLength / 2 * t * t;
+                    const width = startWidth * (1 - t) + endWidth * t;
+                    if (i === 0) {
+                        ctx.moveTo(x, -width / 2);
+                    } else {
+                        ctx.lineTo(x, -width / 2);
+                    }
+                }
+                for (let i = steps; i >= 0; i--) {
+                    const t = i / steps;
+                    const x = -visualLength / 2 * (1 - t) * (1 - t) + rotatedControlX * 2 * (1 - t) * t + visualLength / 2 * t * t;
+                    const width = startWidth * (1 - t) + endWidth * t;
+                    ctx.lineTo(x, width / 2);
+                }
+            } else {
+                ctx.moveTo(-visualLength / 2, -startWidth / 2);
+                ctx.lineTo(visualLength / 2, -endWidth / 2);
+                ctx.lineTo(visualLength / 2, endWidth / 2);
+                ctx.lineTo(-visualLength / 2, startWidth / 2);
+            }
             ctx.closePath();
             ctx.fill();
         } else {
@@ -353,7 +471,13 @@ export class Arrow extends Line {
 
             ctx.beginPath();
             ctx.moveTo(-visualLength / 2, 0);
-            ctx.lineTo(visualLength / 2, 0);
+            if (isCurved) {
+                // Draw quadratic bezier curve
+                ctx.quadraticCurveTo(rotatedControlX, rotatedControlY, visualLength / 2, 0);
+            } else {
+                // Draw straight line
+                ctx.lineTo(visualLength / 2, 0);
+            }
             ctx.stroke();
 
             // Disable dashes for arrow heads
@@ -367,6 +491,23 @@ export class Arrow extends Line {
             if (this.arrowHead === 'none') return; // Only draw if arrow heads are enabled
             ctx.save();
             ctx.translate(x, 0);
+
+            // Calculate tangent angle at the endpoint for curved arrows
+            if (isCurved) {
+                let tangentAngle = 0;
+                if (direction === 1) {
+                    // Right endpoint (p2) - tangent at t=1
+                    const dx = visualLength / 2 - rotatedControlX;
+                    const dy = -rotatedControlY;
+                    tangentAngle = Math.atan2(dy, dx);
+                } else {
+                    // Left endpoint (p1) - tangent at t=0
+                    const dx = rotatedControlX - (-visualLength / 2);
+                    const dy = rotatedControlY;
+                    tangentAngle = Math.atan2(dy, dx);
+                }
+                ctx.rotate(tangentAngle);
+            }
 
             const isHollow = this.headStyle.endsWith('-hollow');
             const style = isHollow ? this.headStyle.replace('-hollow', '') : this.headStyle;
@@ -420,7 +561,7 @@ export class Arrow extends Line {
      * Override toObject to include custom properties
      */
     toObject(propertiesToInclude: any[] = []): any {
-        return super.toObject(['arrowHead', 'headStyle', 'lineStyle', 'thicknessStyle', 'useCustomSelection', ...propertiesToInclude] as any);
+        return super.toObject(['arrowHead', 'headStyle', 'lineStyle', 'thicknessStyle', 'useCustomSelection', 'controlOffsetX', 'controlOffsetY', ...propertiesToInclude] as any);
     }
 }
 
