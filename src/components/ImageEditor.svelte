@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { onMount, onDestroy, createEventDispatcher } from 'svelte';
+    import { onMount, onDestroy, createEventDispatcher, tick } from 'svelte';
     const dispatch = createEventDispatcher();
     import { confirm } from 'siyuan';
     import { t } from '../utils/i18n';
@@ -878,18 +878,29 @@
         isDraggingPopup = false;
     }
 
-    // Calculate initial popup position based on editor container's viewport position
-    function updatePopupPosition() {
+    async function updatePopupPosition() {
         if (editorContainerEl) {
             const rect = editorContainerEl.getBoundingClientRect();
+            // Initial guess to avoid top-left flash
             popupPos = {
-                x: rect.left + 12,
-                y: rect.top + 44, // below the toolbar
+                x: rect.right - 300,
+                y: rect.bottom - 400,
             };
+
+            await tick();
+
+            const popupEl = editorContainerEl.querySelector('.tool-popup');
+            if (popupEl) {
+                const pRect = popupEl.getBoundingClientRect();
+                popupPos = {
+                    x: rect.right - pRect.width - 20,
+                    y: rect.bottom - pRect.height - 20,
+                };
+            }
         }
     }
 
-    function handleToolChange(e: any) {
+    async function handleToolChange(e: any) {
         const t = e.detail.tool;
         activeTool = t;
         // show popup for tools that have a submenu
@@ -911,7 +922,7 @@
         showToolPopup = hasSubmenu;
         // Only update popup position on first open (before user drags it)
         if (hasSubmenu && !popupPositioned) {
-            updatePopupPosition();
+            await updatePopupPosition();
             popupPositioned = true;
         }
         if (canvasEditorRef && typeof canvasEditorRef.setTool === 'function') {
@@ -1215,7 +1226,7 @@
                 on:toolChange={e => {
                     activeTool = e.detail.tool;
                 }}
-                on:selection={e => {
+                on:selection={async e => {
                     try {
                         const type = e.detail?.type;
                         if (e.detail && e.detail.options) {
@@ -1238,7 +1249,7 @@
                                     activeShape = shapeType;
                                     showToolPopup = true;
                                     if (!popupPositioned) {
-                                        updatePopupPosition();
+                                        await updatePopupPosition();
                                         popupPositioned = true;
                                     }
                                     try {
@@ -1267,7 +1278,7 @@
                                     activeTool = 'text';
                                     showToolPopup = true;
                                     if (!popupPositioned) {
-                                        updatePopupPosition();
+                                        await updatePopupPosition();
                                         popupPositioned = true;
                                     }
                                     try {
@@ -1289,7 +1300,7 @@
                                     activeTool = 'arrow';
                                     showToolPopup = true;
                                     if (!popupPositioned) {
-                                        updatePopupPosition();
+                                        await updatePopupPosition();
                                         popupPositioned = true;
                                     }
                                     try {
@@ -1311,7 +1322,7 @@
                                     activeTool = 'number-marker';
                                     showToolPopup = true;
                                     if (!popupPositioned) {
-                                        updatePopupPosition();
+                                        await updatePopupPosition();
                                         popupPositioned = true;
                                     }
                                 }
@@ -1326,7 +1337,7 @@
                                     activeTool = 'mosaic';
                                     showToolPopup = true;
                                     if (!popupPositioned) {
-                                        updatePopupPosition();
+                                        await updatePopupPosition();
                                         popupPositioned = true;
                                     }
                                     try {
@@ -1348,7 +1359,7 @@
                                     activeTool = 'image';
                                     showToolPopup = true;
                                     if (!popupPositioned) {
-                                        updatePopupPosition();
+                                        await updatePopupPosition();
                                         popupPositioned = true;
                                     }
                                     try {
