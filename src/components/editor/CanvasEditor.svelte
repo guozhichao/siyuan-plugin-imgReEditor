@@ -51,6 +51,9 @@
     // number marker state
     let currentNumber = 1;
     // crop/resize states
+    // context menu state
+    let contextMenu: HTMLDivElement | null = null;
+    let contextMenuTarget: any = null;
 
     export function isDirty() {
         return historyIndex > 0;
@@ -93,6 +96,12 @@
         '_borderShadowOpacity',
         '_isCanvasBackground',
         '_isCanvasBoundary',
+        'lockMovementX',
+        'lockMovementY',
+        'lockRotation',
+        'lockScalingX',
+        'lockScalingY',
+        'hasControls',
     ];
     // Flag to prevent recursive history updates during undo/redo
     let isHistoryProcessing = false;
@@ -566,6 +575,8 @@
             renderOnAddRemove: true,
             selectionKey: 'ctrlKey',
             backgroundColor: 'transparent',
+            fireRightClick: true,
+            stopContextMenu: true,
         });
 
         // Initialize custom controls
@@ -591,6 +602,37 @@
         });
 
         dispatch('ready');
+
+        // Handle right click for context menu
+        canvas.on('mouse:down', (opt: any) => {
+            const e = opt.e as MouseEvent;
+            const button =
+                opt.button || (e.button === 2 ? 3 : e.button === 0 ? 1 : e.button === 1 ? 2 : 0);
+            console.log('mouse:down', button, opt.target?.type, 'e.button:', e.button);
+
+            // Close context menu on left click
+            if (button === 1 || e.button === 0) {
+                hideContextMenu();
+                return;
+            }
+
+            // Handle right click (button === 3 or e.button === 2)
+            if (button === 3 || e.button === 2) {
+                const target = opt.target;
+                console.log(
+                    'right click on:',
+                    target?.type,
+                    'isEditable:',
+                    target && isEditableObject(target)
+                );
+                if (target && isEditableObject(target)) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    showContextMenu(e, target);
+                    return false;
+                }
+            }
+        });
 
         // Attach basic history listeners (use typed scheduling for merging)
         canvas.on('object:added', (opt: any) => {
@@ -973,6 +1015,7 @@
                     headStyle: activeToolOptions.headStyle || 'sharp',
                     lineStyle: activeToolOptions.lineStyle || 'solid',
                     thicknessStyle: activeToolOptions.thicknessStyle || 'uniform',
+                    useCustomSelection: true,
                     selectable: false,
                     evented: false,
                     erasable: true,
@@ -1769,6 +1812,9 @@
             if (onDocKeyShortcuts)
                 document.removeEventListener('keydown', onDocKeyShortcuts as any);
         } catch (e) {}
+        try {
+            hideContextMenu();
+        } catch (e) {}
     });
 
     export function getCanvas() {
@@ -1853,11 +1899,11 @@
         if (canvas) {
             const drawingTools = ['shape', 'arrow', 'mosaic', 'number-marker'];
             const isDrawingTool = drawingTools.includes(tool || '');
-            
+
             canvas.getObjects().forEach((obj: any) => {
                 // Skip special objects
                 if (obj._isCanvasBoundary || obj._isCanvasBackground) return;
-                
+
                 // For image objects, control their interactivity based on tool
                 if (obj.type === 'image') {
                     if (isDrawingTool) {
@@ -1871,7 +1917,7 @@
                     }
                 }
             });
-            
+
             canvas.requestRenderAll();
         }
 
@@ -4935,6 +4981,128 @@
         input.click();
     }
 
+    // Context menu functions
+    function isEditableObject(obj: any): boolean {
+        if (!obj) return false;
+        // Allow context menu for shapes, arrows, text, mosaic, number markers, and images
+        const editableTypes = [
+            'rect',
+            'ellipse',
+            'circle',
+            'arrow',
+            'line',
+            'i-text',
+            'textbox',
+            'text',
+            'mosaic-rect',
+            'number-marker',
+            'image',
+            'path',
+        ];
+        if (!editableTypes.includes(obj.type)) return false;
+        // Exclude special objects
+        if (obj._isCanvasBoundary || obj._isCanvasBackground || obj._isCropRect) return false;
+        return true;
+    }
+
+    function showContextMenu(e: MouseEvent, target: any) {
+        hideContextMenu();
+
+        contextMenuTarget = target;
+        contextMenu = document.createElement('div');
+        contextMenu.className = 'canvas-context-menu';
+
+        const isLocked = target.lockMovementX || target.lockMovementY;
+
+        const menuItems = [
+            { label: '置于顶层', action: () => bringToFront() },
+            { label: '上移一层', action: () => bringForward() },
+            { label: '下移一层', action: () => sendBackward() },
+            { label: '置于底层', action: () => sendToBack() },
+            { label: '---', action: null },
+            { label: isLocked ? '解锁' : '锁定', action: () => toggleLock() },
+        ];
+
+        menuItems.forEach(item => {
+            if (item.label === '---') {
+                const divider = document.createElement('div');
+                divider.className = 'menu-divider';
+                contextMenu!.appendChild(divider);
+            } else {
+                const menuItem = document.createElement('div');
+                menuItem.className = 'menu-item';
+                menuItem.textContent = item.label;
+                menuItem.onclick = () => {
+                    if (item.action) item.action();
+                    hideContextMenu();
+                };
+                contextMenu!.appendChild(menuItem);
+            }
+        });
+
+        contextMenu.style.left = e.clientX + 'px';
+        contextMenu.style.top = e.clientY + 'px';
+        document.body.appendChild(contextMenu);
+
+        // Close on click outside
+        setTimeout(() => {
+            document.addEventListener('click', hideContextMenu, { once: true });
+        }, 0);
+    }
+
+    function hideContextMenu() {
+        if (contextMenu && contextMenu.parentNode) {
+            contextMenu.parentNode.removeChild(contextMenu);
+        }
+        contextMenu = null;
+        contextMenuTarget = null;
+    }
+
+    function bringToFront() {
+        if (!canvas || !contextMenuTarget) return;
+        canvas.bringObjectToFront(contextMenuTarget);
+        canvas.requestRenderAll();
+        schedulePushWithType('modified');
+    }
+
+    function bringForward() {
+        if (!canvas || !contextMenuTarget) return;
+        canvas.bringObjectForward(contextMenuTarget);
+        canvas.requestRenderAll();
+        schedulePushWithType('modified');
+    }
+
+    function sendBackward() {
+        if (!canvas || !contextMenuTarget) return;
+        canvas.sendObjectBackwards(contextMenuTarget);
+        canvas.requestRenderAll();
+        schedulePushWithType('modified');
+    }
+
+    function sendToBack() {
+        if (!canvas || !contextMenuTarget) return;
+        canvas.sendObjectToBack(contextMenuTarget);
+        canvas.requestRenderAll();
+        schedulePushWithType('modified');
+    }
+
+    function toggleLock() {
+        if (!canvas || !contextMenuTarget) return;
+        const isLocked = contextMenuTarget.lockMovementX || contextMenuTarget.lockMovementY;
+
+        contextMenuTarget.set({
+            lockMovementX: !isLocked,
+            lockMovementY: !isLocked,
+            lockRotation: !isLocked,
+            lockScalingX: !isLocked,
+            lockScalingY: !isLocked,
+            hasControls: isLocked, // Show controls when unlocked, hide when locked
+        });
+
+        canvas.requestRenderAll();
+        schedulePushWithType('modified');
+    }
+
     onMount(() => {
         window.addEventListener('paste', onWindowPaste);
     });
@@ -5033,5 +5201,37 @@
     }
     .zoom-controls button:active {
         transform: scale(0.95);
+    }
+
+    :global(.canvas-context-menu) {
+        position: fixed;
+        background: var(--b3-theme-surface);
+        border: 1px solid var(--b3-theme-surface-lighter);
+        border-radius: 6px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        padding: 4px;
+        min-width: 140px;
+        z-index: 10000;
+        font-size: 13px;
+    }
+
+    :global(.canvas-context-menu .menu-item) {
+        padding: 8px 12px;
+        cursor: pointer;
+        border-radius: 4px;
+        color: var(--b3-theme-on-surface);
+        transition: background-color 0.15s;
+        user-select: none;
+    }
+
+    :global(.canvas-context-menu .menu-item:hover) {
+        background: var(--b3-theme-primary-lightest);
+        color: var(--b3-theme-primary);
+    }
+
+    :global(.canvas-context-menu .menu-divider) {
+        height: 1px;
+        background: var(--b3-theme-surface-lighter);
+        margin: 4px 0;
     }
 </style>
