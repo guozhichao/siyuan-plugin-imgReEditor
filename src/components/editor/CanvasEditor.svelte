@@ -1893,11 +1893,11 @@
         if (canvas) {
             // Define tool to type mapping
             const toolTypeMap: { [key: string]: string[] } = {
-                'shape': ['rect', 'circle', 'ellipse', 'triangle'],
-                'arrow': ['arrow'],
-                'mosaic': ['mosaic-rect'],
+                shape: ['rect', 'circle', 'ellipse', 'triangle'],
+                arrow: ['arrow'],
+                mosaic: ['mosaic-rect'],
                 'number-marker': ['number-marker'],
-                'text': ['i-text', 'textbox', 'text'],
+                text: ['i-text', 'textbox', 'text'],
             };
 
             const drawingTools = ['shape', 'arrow', 'mosaic', 'number-marker', 'text'];
@@ -1911,7 +1911,7 @@
                 if (isDrawingTool && tool) {
                     const allowedTypes = toolTypeMap[tool] || [];
                     const isAllowedType = allowedTypes.includes(obj.type);
-                    
+
                     obj.selectable = isAllowedType;
                     obj.evented = isAllowedType;
                 } else {
