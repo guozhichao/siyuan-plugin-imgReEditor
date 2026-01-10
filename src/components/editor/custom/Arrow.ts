@@ -47,6 +47,14 @@ const lineActionHandler = (
 ) => {
     const { target, corner } = transform;
     const line = target as any;
+    const canvas = line.canvas;
+
+    if (!canvas) return false;
+
+    // 将屏幕坐标转换为画布坐标（考虑viewport transform）
+    const pointer = new Point(x, y);
+    const invertedVPT = util.invertTransform(canvas.viewportTransform);
+    const canvasPoint = util.transformPoint(pointer, invertedVPT);
 
     // Get current canvas positions of both endpoints
     const matrix = line.calcTransformMatrix();
@@ -61,11 +69,11 @@ const lineActionHandler = (
 
     // Update the canvas position of the dragged endpoint
     if (corner === 'p1') {
-        p1Canvas.x = x;
-        p1Canvas.y = y;
+        p1Canvas.x = canvasPoint.x;
+        p1Canvas.y = canvasPoint.y;
     } else {
-        p2Canvas.x = x;
-        p2Canvas.y = y;
+        p2Canvas.x = canvasPoint.x;
+        p2Canvas.y = canvasPoint.y;
     }
 
     // Recalculate line properties from the two canvas endpoints
@@ -89,38 +97,69 @@ const lineActionHandler = (
     return true;
 };
 
+// --- MODIFIED POSITION HANDLERS ---
+
 // Custom position handlers to map controls to x1,y1 and x2,y2
 function p1PositionHandler(_dim: any, finalMatrix: any, fabricObject: any) {
-    // For Line objects, x1/y1 are relative to the object's own coordinate system
-    // We need to transform them considering the object's center point
     const line = fabricObject as any;
+    const canvas = line.canvas;
+
+    // 计算端点相对于对象中心的局部坐标
     const centerX = (line.x1 + line.x2) / 2;
     const centerY = (line.y1 + line.y2) / 2;
     const localPoint = new Point(line.x1 - centerX, line.y1 - centerY);
-    return util.transformPoint(localPoint, finalMatrix);
+
+    // 转换到画布坐标
+    const canvasPoint = util.transformPoint(localPoint, line.calcTransformMatrix());
+
+    // 应用 viewport transform 转换到屏幕坐标
+    if (canvas && canvas.viewportTransform) {
+        return util.transformPoint(canvasPoint, canvas.viewportTransform);
+    }
+
+    return canvasPoint;
 }
 
 function p2PositionHandler(_dim: any, finalMatrix: any, fabricObject: any) {
-    // For Line objects, x2/y2 are relative to the object's own coordinate system
     const line = fabricObject as any;
+    const canvas = line.canvas;
+
+    // 计算端点相对于对象中心的局部坐标
     const centerX = (line.x1 + line.x2) / 2;
     const centerY = (line.y1 + line.y2) / 2;
     const localPoint = new Point(line.x2 - centerX, line.y2 - centerY);
-    return util.transformPoint(localPoint, finalMatrix);
+
+    // 转换到画布坐标
+    const canvasPoint = util.transformPoint(localPoint, line.calcTransformMatrix());
+
+    // 应用 viewport transform 转换到屏幕坐标
+    if (canvas && canvas.viewportTransform) {
+        return util.transformPoint(canvasPoint, canvas.viewportTransform);
+    }
+
+    return canvasPoint;
 }
 
 // Delete control position handler - positioned above the second endpoint
 function deletePositionHandler(_dim: any, finalMatrix: any, fabricObject: any) {
     const line = fabricObject as any;
+    const canvas = line.canvas;
+
+    // 计算端点相对于对象中心的局部坐标
     const centerX = (line.x1 + line.x2) / 2;
     const centerY = (line.y1 + line.y2) / 2;
-
-    // Position at p2 endpoint
     const localPoint = new Point(line.x2 - centerX, line.y2 - centerY);
-    const canvasPoint = util.transformPoint(localPoint, finalMatrix);
 
-    // Offset upward by 30 pixels
+    // 转换到画布坐标
+    const canvasPoint = util.transformPoint(localPoint, line.calcTransformMatrix());
+
+    // 在画布坐标系中保持固定偏移
     canvasPoint.y -= 30;
+
+    // 应用 viewport transform 转换到屏幕坐标
+    if (canvas && canvas.viewportTransform) {
+        return util.transformPoint(canvasPoint, canvas.viewportTransform);
+    }
 
     return canvasPoint;
 }
@@ -128,20 +167,28 @@ function deletePositionHandler(_dim: any, finalMatrix: any, fabricObject: any) {
 // Center control point position handler for curve control
 function centerControlPositionHandler(_dim: any, finalMatrix: any, fabricObject: any) {
     const arrow = fabricObject as any;
+    const canvas = arrow.canvas;
 
-    // For quadratic bezier curve, the visual control point should be at t=0.5
-    // B(0.5) = 0.25*P0 + 0.5*P1 + 0.25*P2
-    // where P0 = (-length/2, 0), P1 = (controlOffsetX, controlOffsetY), P2 = (length/2, 0)
-    // in local coordinates
-
-    // Calculate the position on the curve at t=0.5
+    // 计算曲线控制点在 t=0.5 处的位置（在对象局部坐标系中）
     const t = 0.5;
+    // 对于二次贝塞尔曲线，中点的控制点影响为：2*t*(1-t)*controlOffset
     const localX = arrow.controlOffsetX * 2 * t * (1 - t);
     const localY = arrow.controlOffsetY * 2 * t * (1 - t);
 
     const localPoint = new Point(localX, localY);
-    return util.transformPoint(localPoint, finalMatrix);
+
+    // 转换到画布坐标
+    const canvasPoint = util.transformPoint(localPoint, arrow.calcTransformMatrix());
+
+    // 应用 viewport transform 转换到屏幕坐标
+    if (canvas && canvas.viewportTransform) {
+        return util.transformPoint(canvasPoint, canvas.viewportTransform);
+    }
+
+    return canvasPoint;
 }
+
+// --- END OF MODIFIED HANDLERS ---
 
 // Action handler for center control point
 const centerControlActionHandler = (
@@ -152,21 +199,22 @@ const centerControlActionHandler = (
 ) => {
     const { target } = transform;
     const arrow = target as any;
+    const canvas = arrow.canvas;
 
-    // Convert canvas position to local coordinates relative to arrow center
+    if (!canvas) return false;
+
+    // 将屏幕坐标转换为画布坐标（考虑viewport transform）
+    const pointer = new Point(x, y);
+    const invertedVPT = util.invertTransform(canvas.viewportTransform);
+    const canvasPoint = util.transformPoint(pointer, invertedVPT);
+
+    // 将画布坐标转换为对象局部坐标
     const matrix = arrow.calcTransformMatrix();
     const invertedMatrix = util.invertTransform(matrix);
-    const canvasPoint = new Point(x, y);
     const localPoint = util.transformPoint(canvasPoint, invertedMatrix);
 
     // The user is dragging the point on the curve at t=0.5
     // For quadratic bezier: B(0.5) = 0.25*P0 + 0.5*P1 + 0.25*P2
-    // In our case: P0 = (0,0) - center, P2 = (0,0) - center (symmetric)
-    // So: B(0.5) = 0.5*P1
-    // Therefore: P1 = 2 * B(0.5)
-    // But we need to account for the fact that the curve formula is:
-    // B(t) = (1-t)²*P0 + 2(1-t)t*P1 + t²*P2
-    // At t=0.5: B(0.5) = 0.25*P0 + 0.5*P1 + 0.25*P2
     // Since P0 and P2 are at (-length/2, 0) and (length/2, 0):
     // The X components cancel out for the offset
     // localPoint is where the user wants the curve to pass through
