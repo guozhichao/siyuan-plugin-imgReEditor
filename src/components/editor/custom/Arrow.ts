@@ -213,6 +213,9 @@ export class Arrow extends Line {
         this.strokeLineJoin = 'round';
         this.objectCaching = false;
         this.hasBorders = !this.useCustomSelection;
+        // Enable per-pixel target finding for accurate curve hit detection
+        this.perPixelTargetFind = true;
+        this.targetFindTolerance = 10;
         // Initialize control point offset at 0 (on the line, straight arrow by default)
         this.controlOffsetX = options?.controlOffsetX ?? 0;
         this.controlOffsetY = options?.controlOffsetY ?? 0;
@@ -530,6 +533,168 @@ export class Arrow extends Line {
         }
         ctx.restore();
     }
+
+    /**
+     * Override _getNonTransformedDimensions to account for curve
+     * This is used by Fabric for internal calculations
+     */
+    _getNonTransformedDimensions(): Point {
+        const isCurved = Math.abs(this.controlOffsetX) > 0.1 || Math.abs(this.controlOffsetY) > 0.1;
+        
+        if (!isCurved) {
+            return super._getNonTransformedDimensions();
+        }
+
+        // Calculate actual curve bounds in local coordinates
+        const centerX = (this.x1 + this.x2) / 2;
+        const centerY = (this.y1 + this.y2) / 2;
+        const p1x = centerX + this.controlOffsetX;
+        const p1y = centerY + this.controlOffsetY;
+
+        let minX = Math.min(this.x1, this.x2, p1x);
+        let maxX = Math.max(this.x1, this.x2, p1x);
+        let minY = Math.min(this.y1, this.y2, p1y);
+        let maxY = Math.max(this.y1, this.y2, p1y);
+
+        // Sample curve for more accurate bounds
+        const samples = 20;
+        for (let i = 0; i <= samples; i++) {
+            const t = i / samples;
+            const x = Math.pow(1 - t, 2) * this.x1 +
+                     2 * (1 - t) * t * p1x +
+                     Math.pow(t, 2) * this.x2;
+            const y = Math.pow(1 - t, 2) * this.y1 +
+                     2 * (1 - t) * t * p1y +
+                     Math.pow(t, 2) * this.y2;
+            
+            minX = Math.min(minX, x);
+            maxX = Math.max(maxX, x);
+            minY = Math.min(minY, y);
+            maxY = Math.max(maxY, y);
+        }
+
+        const padding = Math.max(this.strokeWidth * 2, 15);
+        return new Point(maxX - minX + padding * 2, maxY - minY + padding * 2);
+    }
+
+    /**
+     * Override getCoords to return corner points that include the curve
+     */
+    getCoords(): Point[] {
+        const isCurved = Math.abs(this.controlOffsetX) > 0.1 || Math.abs(this.controlOffsetY) > 0.1;
+        
+        if (!isCurved) {
+            return super.getCoords();
+        }
+
+        // Calculate bounds in local coordinates
+        const centerX = (this.x1 + this.x2) / 2;
+        const centerY = (this.y1 + this.y2) / 2;
+        const p1x = centerX + this.controlOffsetX;
+        const p1y = centerY + this.controlOffsetY;
+
+        let minX = Math.min(this.x1, this.x2, p1x);
+        let maxX = Math.max(this.x1, this.x2, p1x);
+        let minY = Math.min(this.y1, this.y2, p1y);
+        let maxY = Math.max(this.y1, this.y2, p1y);
+
+        // Sample curve
+        const samples = 20;
+        for (let i = 0; i <= samples; i++) {
+            const t = i / samples;
+            const x = Math.pow(1 - t, 2) * this.x1 +
+                     2 * (1 - t) * t * p1x +
+                     Math.pow(t, 2) * this.x2;
+            const y = Math.pow(1 - t, 2) * this.y1 +
+                     2 * (1 - t) * t * p1y +
+                     Math.pow(t, 2) * this.y2;
+            
+            minX = Math.min(minX, x);
+            maxX = Math.max(maxX, x);
+            minY = Math.min(minY, y);
+            maxY = Math.max(maxY, y);
+        }
+
+        const padding = Math.max(this.strokeWidth * 2, 15);
+        minX -= padding;
+        minY -= padding;
+        maxX += padding;
+        maxY += padding;
+
+        // Transform the four corners
+        const matrix = this.calcTransformMatrix();
+        const tl = util.transformPoint(new Point(minX, minY), matrix);
+        const tr = util.transformPoint(new Point(maxX, minY), matrix);
+        const br = util.transformPoint(new Point(maxX, maxY), matrix);
+        const bl = util.transformPoint(new Point(minX, maxY), matrix);
+
+        return [tl, tr, br, bl];
+    }
+
+    /**
+     * Override getBoundingRect to include the curved path
+     * This ensures the bounding box encompasses the entire curve
+     */
+    getBoundingRect(): any {
+        const isCurved = Math.abs(this.controlOffsetX) > 0.1 || Math.abs(this.controlOffsetY) > 0.1;
+        
+        if (!isCurved) {
+            return super.getBoundingRect();
+        }
+
+        // For curved arrows, calculate bounding box that includes the curve
+        const matrix = this.calcTransformMatrix();
+        const points: Point[] = [];
+        
+        // Line's x1,y1,x2,y2 are relative to left,top
+        // controlOffsetX/Y are relative to object center
+        // So we need to adjust: center of line is at ((x1+x2)/2, (y1+y2)/2)
+        const centerX = (this.x1 + this.x2) / 2;
+        const centerY = (this.y1 + this.y2) / 2;
+        
+        // Sample points along the curve
+        const samples = 30;
+        for (let i = 0; i <= samples; i++) {
+            const t = i / samples;
+            // Calculate point on quadratic bezier curve
+            // Control point is at center + controlOffset
+            const p1x = centerX + this.controlOffsetX;
+            const p1y = centerY + this.controlOffsetY;
+            
+            const x = Math.pow(1 - t, 2) * this.x1 +
+                     2 * (1 - t) * t * p1x +
+                     Math.pow(t, 2) * this.x2;
+            const y = Math.pow(1 - t, 2) * this.y1 +
+                     2 * (1 - t) * t * p1y +
+                     Math.pow(t, 2) * this.y2;
+            
+            // Transform to canvas coordinates
+            const transformed = util.transformPoint(new Point(x, y), matrix);
+            points.push(transformed);
+        }
+        
+        // Find min/max coordinates
+        let minX = Infinity, minY = Infinity;
+        let maxX = -Infinity, maxY = -Infinity;
+        
+        for (const p of points) {
+            minX = Math.min(minX, p.x);
+            minY = Math.min(minY, p.y);
+            maxX = Math.max(maxX, p.x);
+            maxY = Math.max(maxY, p.y);
+        }
+        
+        // Add generous padding for stroke width and hit detection
+        const padding = Math.max(this.strokeWidth * 3, 20);
+        
+        return {
+            left: minX - padding,
+            top: minY - padding,
+            width: maxX - minX + padding * 2,
+            height: maxY - minY + padding * 2,
+        };
+    }
+    
     /**
      * Override containsPoint to support curve hit detection
      * This allows clicking on the curved line to select the arrow
@@ -545,7 +710,7 @@ export class Arrow extends Line {
 
         // For curved arrows, check distance to bezier curve
         const visualStrokeWidth = this.getVisualStrokeWidth();
-        const threshold = Math.max(visualStrokeWidth / 2 + 5, 10); // Hit area threshold
+        const threshold = Math.max(visualStrokeWidth / 2 + 15, 20); // Increased hit area threshold
 
         // Transform point to local coordinates
         const localPoint = util.transformPoint(
@@ -553,45 +718,32 @@ export class Arrow extends Line {
             util.invertTransform(this.calcTransformMatrix())
         );
 
-        // Scale local point to match the scaled coordinate system
-        const scaledLocalX = localPoint.x * this.scaleX;
-        const scaledLocalY = localPoint.y * this.scaleY;
-
-        // Calculate curve parameters
-        const localXDiff = this.x2 - this.x1;
-        const localYDiff = this.y2 - this.y1;
-        const localAngle = Math.atan2(localYDiff, localXDiff);
-        const visualLength = Math.sqrt(
-            Math.pow(localXDiff * this.scaleX, 2) +
-            Math.pow(localYDiff * this.scaleY, 2)
-        );
-
-        // Transform control point to rotated coordinate system
-        const cosA = Math.cos(-localAngle);
-        const sinA = Math.sin(-localAngle);
-        const rotatedControlX = this.controlOffsetX * this.scaleX * cosA -
-            this.controlOffsetY * this.scaleY * sinA;
-        const rotatedControlY = this.controlOffsetX * this.scaleX * sinA +
-            this.controlOffsetY * this.scaleY * sinA;
-
-        // Rotate the test point to align with the curve's coordinate system
-        const rotatedX = scaledLocalX * cosA - scaledLocalY * sinA;
-        const rotatedY = scaledLocalX * sinA + scaledLocalY * cosA;
+        // Line's x1,y1,x2,y2 are relative to left,top
+        // controlOffsetX/Y are relative to object center
+        const centerX = (this.x1 + this.x2) / 2;
+        const centerY = (this.y1 + this.y2) / 2;
+        
+        // Control point is at center + controlOffset
+        const p1x = centerX + this.controlOffsetX;
+        const p1y = centerY + this.controlOffsetY;
 
         // Sample points along the quadratic bezier curve
-        const samples = 20;
+        const samples = 50; // Increased samples for better accuracy
         let minDistance = Infinity;
 
         for (let i = 0; i <= samples; i++) {
             const t = i / samples;
-            // Quadratic bezier formula: P(t) = (1-t)²P0 + 2(1-t)tP1 + t²P2
-            const curveX = Math.pow(1 - t, 2) * (-visualLength / 2) +
-                2 * (1 - t) * t * rotatedControlX +
-                Math.pow(t, 2) * (visualLength / 2);
-            const curveY = 2 * (1 - t) * t * rotatedControlY;
+            // Calculate point on quadratic bezier curve in local coordinates
+            // P(t) = (1-t)²P0 + 2(1-t)tP1 + t²P2
+            const curveX = Math.pow(1 - t, 2) * this.x1 +
+                          2 * (1 - t) * t * p1x +
+                          Math.pow(t, 2) * this.x2;
+            const curveY = Math.pow(1 - t, 2) * this.y1 +
+                          2 * (1 - t) * t * p1y +
+                          Math.pow(t, 2) * this.y2;
 
-            const dx = rotatedX - curveX;
-            const dy = rotatedY - curveY;
+            const dx = localPoint.x - curveX;
+            const dy = localPoint.y - curveY;
             const distance = Math.sqrt(dx * dx + dy * dy);
 
             if (distance < minDistance) {
