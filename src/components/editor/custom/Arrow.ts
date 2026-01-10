@@ -540,7 +540,7 @@ export class Arrow extends Line {
      */
     _getNonTransformedDimensions(): Point {
         const isCurved = Math.abs(this.controlOffsetX) > 0.1 || Math.abs(this.controlOffsetY) > 0.1;
-        
+
         if (!isCurved) {
             return super._getNonTransformedDimensions();
         }
@@ -561,12 +561,12 @@ export class Arrow extends Line {
         for (let i = 0; i <= samples; i++) {
             const t = i / samples;
             const x = Math.pow(1 - t, 2) * this.x1 +
-                     2 * (1 - t) * t * p1x +
-                     Math.pow(t, 2) * this.x2;
+                2 * (1 - t) * t * p1x +
+                Math.pow(t, 2) * this.x2;
             const y = Math.pow(1 - t, 2) * this.y1 +
-                     2 * (1 - t) * t * p1y +
-                     Math.pow(t, 2) * this.y2;
-            
+                2 * (1 - t) * t * p1y +
+                Math.pow(t, 2) * this.y2;
+
             minX = Math.min(minX, x);
             maxX = Math.max(maxX, x);
             minY = Math.min(minY, y);
@@ -582,7 +582,7 @@ export class Arrow extends Line {
      */
     getCoords(): Point[] {
         const isCurved = Math.abs(this.controlOffsetX) > 0.1 || Math.abs(this.controlOffsetY) > 0.1;
-        
+
         if (!isCurved) {
             return super.getCoords();
         }
@@ -603,12 +603,12 @@ export class Arrow extends Line {
         for (let i = 0; i <= samples; i++) {
             const t = i / samples;
             const x = Math.pow(1 - t, 2) * this.x1 +
-                     2 * (1 - t) * t * p1x +
-                     Math.pow(t, 2) * this.x2;
+                2 * (1 - t) * t * p1x +
+                Math.pow(t, 2) * this.x2;
             const y = Math.pow(1 - t, 2) * this.y1 +
-                     2 * (1 - t) * t * p1y +
-                     Math.pow(t, 2) * this.y2;
-            
+                2 * (1 - t) * t * p1y +
+                Math.pow(t, 2) * this.y2;
+
             minX = Math.min(minX, x);
             maxX = Math.max(maxX, x);
             minY = Math.min(minY, y);
@@ -637,7 +637,7 @@ export class Arrow extends Line {
      */
     getBoundingRect(): any {
         const isCurved = Math.abs(this.controlOffsetX) > 0.1 || Math.abs(this.controlOffsetY) > 0.1;
-        
+
         if (!isCurved) {
             return super.getBoundingRect();
         }
@@ -645,13 +645,13 @@ export class Arrow extends Line {
         // For curved arrows, calculate bounding box that includes the curve
         const matrix = this.calcTransformMatrix();
         const points: Point[] = [];
-        
+
         // Line's x1,y1,x2,y2 are relative to left,top
         // controlOffsetX/Y are relative to object center
         // So we need to adjust: center of line is at ((x1+x2)/2, (y1+y2)/2)
         const centerX = (this.x1 + this.x2) / 2;
         const centerY = (this.y1 + this.y2) / 2;
-        
+
         // Sample points along the curve
         const samples = 30;
         for (let i = 0; i <= samples; i++) {
@@ -660,33 +660,33 @@ export class Arrow extends Line {
             // Control point is at center + controlOffset
             const p1x = centerX + this.controlOffsetX;
             const p1y = centerY + this.controlOffsetY;
-            
+
             const x = Math.pow(1 - t, 2) * this.x1 +
-                     2 * (1 - t) * t * p1x +
-                     Math.pow(t, 2) * this.x2;
+                2 * (1 - t) * t * p1x +
+                Math.pow(t, 2) * this.x2;
             const y = Math.pow(1 - t, 2) * this.y1 +
-                     2 * (1 - t) * t * p1y +
-                     Math.pow(t, 2) * this.y2;
-            
+                2 * (1 - t) * t * p1y +
+                Math.pow(t, 2) * this.y2;
+
             // Transform to canvas coordinates
             const transformed = util.transformPoint(new Point(x, y), matrix);
             points.push(transformed);
         }
-        
+
         // Find min/max coordinates
         let minX = Infinity, minY = Infinity;
         let maxX = -Infinity, maxY = -Infinity;
-        
+
         for (const p of points) {
             minX = Math.min(minX, p.x);
             minY = Math.min(minY, p.y);
             maxX = Math.max(maxX, p.x);
             maxY = Math.max(maxY, p.y);
         }
-        
+
         // Add generous padding for stroke width and hit detection
         const padding = Math.max(this.strokeWidth * 3, 20);
-        
+
         return {
             left: minX - padding,
             top: minY - padding,
@@ -694,7 +694,7 @@ export class Arrow extends Line {
             height: maxY - minY + padding * 2,
         };
     }
-    
+
     /**
      * Override containsPoint to support curve hit detection
      * This allows clicking on the curved line to select the arrow
@@ -722,7 +722,7 @@ export class Arrow extends Line {
         // controlOffsetX/Y are relative to object center
         const centerX = (this.x1 + this.x2) / 2;
         const centerY = (this.y1 + this.y2) / 2;
-        
+
         // Control point is at center + controlOffset
         const p1x = centerX + this.controlOffsetX;
         const p1y = centerY + this.controlOffsetY;
@@ -736,11 +736,11 @@ export class Arrow extends Line {
             // Calculate point on quadratic bezier curve in local coordinates
             // P(t) = (1-t)²P0 + 2(1-t)tP1 + t²P2
             const curveX = Math.pow(1 - t, 2) * this.x1 +
-                          2 * (1 - t) * t * p1x +
-                          Math.pow(t, 2) * this.x2;
+                2 * (1 - t) * t * p1x +
+                Math.pow(t, 2) * this.x2;
             const curveY = Math.pow(1 - t, 2) * this.y1 +
-                          2 * (1 - t) * t * p1y +
-                          Math.pow(t, 2) * this.y2;
+                2 * (1 - t) * t * p1y +
+                Math.pow(t, 2) * this.y2;
 
             const dx = localPoint.x - curveX;
             const dy = localPoint.y - curveY;
