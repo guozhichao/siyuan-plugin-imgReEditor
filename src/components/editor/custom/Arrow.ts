@@ -232,7 +232,9 @@ export class Arrow extends Line {
         this.controlOffsetY = options?.controlOffsetY ?? 0;
 
         // Ensure points are normalized right from the start
-        if (points && points.length === 4) {
+        // Only normalize if this is a new arrow (not being restored from JSON)
+        // When restored from JSON, left/top are already set and x1/y1/x2/y2 are already relative
+        if (points && points.length === 4 && options?.left === undefined && options?.top === undefined) {
             this.setEndpoints(points[0], points[1], points[2], points[3]);
         }
 
