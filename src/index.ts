@@ -2,7 +2,8 @@ import {
     Plugin,
     Dialog,
     Menu,
-    confirm
+    confirm,
+    openTab
 } from "siyuan";
 import "@/index.scss";
 
@@ -323,6 +324,15 @@ export default class PluginSample extends Plugin {
                 this.screenshotManager.openSticker(e.detail.dataURL);
             }
         });
+
+        comp.$on('openInTab', (e) => {
+            const { imagePath: imgPath, blockId: blkId, isCanvasMode: canvasMode, isScreenshotMode: screenshotMode } = e.detail;
+            // Close the current dialog
+            (dialog as any)._skipDirtyCheck = true;
+            dialog.destroy();
+            // Open in a new tab
+            this.openImageEditorInTab(imgPath, blkId, canvasMode, screenshotMode);
+        });
         // Intercept dialog destruction (e.g. clicking "X" or Esc)
         const originalDestroy = dialog.destroy.bind(dialog);
         dialog.destroy = () => {
@@ -345,6 +355,91 @@ export default class PluginSample extends Plugin {
         comp.$on('saveSettings', (e) => {
             this.settings = e.detail;
             this.saveSettings(this.settings);
+        });
+    }
+
+    async openImageEditorInTab(imagePath: string, blockID?: string | null, isCanvasMode: boolean = false, isScreenshotMode: boolean = false) {
+        const fileName = (typeof imagePath === 'string' && imagePath.length && !imagePath.startsWith('data:'))
+            ? imagePath.split('/').pop() || ''
+            : '';
+        const baseTitle = isScreenshotMode ? (t('screenshot.title') || 'Screenshot') : (isCanvasMode ? (t('imageEditor.createCanvas') || 'Create canvas') : (t('imageEditor.editImage') || 'Edit image'));
+        const title = fileName ? `${baseTitle} — ${fileName}` : baseTitle;
+
+        // Create a unique ID for the tab
+        const id = Math.random().toString(36).substring(7);
+
+        // Store references for the component
+        const plugin = this;
+
+        this.addTab({
+            type: id,
+            init() {
+                (this.element as HTMLElement).style.display = 'flex';
+                (this.element as HTMLElement).style.flexDirection = 'column';
+
+                // Create container element
+                const container = document.createElement('div');
+                container.id = 'ImageEditorTab';
+                container.style.height = '100%';
+                container.style.display = 'flex';
+                container.style.flexDirection = 'column';
+                this.element.appendChild(container);
+
+                // Mount the ImageEditor component
+                const comp = new ImageEditorComponent({
+                    target: container,
+                    props: {
+                        imagePath,
+                        blockId: blockID,
+                        settings: plugin.settings,
+                        isCanvasMode,
+                        isScreenshotMode,
+                        initialRect: null,
+                        onClose: (_saved: boolean, _newPath?: string) => {
+                            // Close the tab when editor closes
+                            const tab = document.querySelector(`[data-id="${plugin.name}${id}"]`);
+                            if (tab) {
+                                const closeButton = tab.querySelector('.item__close') as HTMLElement;
+                                closeButton?.click();
+                            }
+                        }
+                    }
+                });
+
+                comp.$on('saveSettings', (e) => {
+                    plugin.settings = e.detail;
+                    plugin.saveSettings(plugin.settings);
+                });
+
+                comp.$on('openHistory', () => {
+                    plugin.screenshotManager.showHistoryDialog((filePath) => {
+                        plugin.openImageEditorInTab(filePath, null, false, true);
+                    });
+                });
+
+                comp.$on('pin', (e) => {
+                    if (e.detail && e.detail.dataURL) {
+                        plugin.screenshotManager.openSticker(e.detail.dataURL);
+                    }
+                });
+
+                comp.$on('openInTab', () => {
+                    // Already in tab, do nothing
+                });
+            },
+            destroy() {
+                // Cleanup when tab is closed
+            }
+        });
+
+        // Open the tab
+        openTab({
+            app: this.app,
+            custom: {
+                icon: 'iconImage',
+                title: title,
+                id: this.name + id,
+            }
         });
     }
 

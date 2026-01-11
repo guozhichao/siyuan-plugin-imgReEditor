@@ -375,6 +375,16 @@
         }
     }
 
+    async function handleOpenInTab() {
+        // Dispatch event to parent to open in tab
+        dispatch('openInTab', {
+            imagePath,
+            blockId,
+            isCanvasMode,
+            isScreenshotMode,
+        });
+    }
+
     async function handlePin() {
         let result: any = null;
         if (isScreenshotMode) {
@@ -1065,6 +1075,7 @@
         {isScreenshotMode}
         on:copy-file={() => handleCopyFile()}
         on:save-as={() => handleSaveAs()}
+        on:open-in-tab={() => handleOpenInTab()}
         on:pin={() => handlePin()}
         on:history={() => handleHistory()}
         on:save={() => handleSave()}
