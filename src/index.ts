@@ -266,8 +266,8 @@ export default class PluginSample extends Plugin {
             title: title,
             content: `<div id='ImageEditor' style='height: 100%;'></div>`,
             destroyCallback: () => { /* component destroyed in callback */ },
-            width: '1000px',
-            height: '700px'
+            width: '80vw',
+            height: '80vh'
         });
 
         // 如果是截图模式，直接设置样式实现全屏效果

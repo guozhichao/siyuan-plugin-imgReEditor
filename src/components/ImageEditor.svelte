@@ -41,7 +41,6 @@
     let redoCount = 0;
     // tool settings state
     let toolSettings: any = {};
-    let showToolPopup: boolean = false;
     let activeShape: string | null = null;
     let tmpBlobUrl: string | null = null;
     let selectCanvasSizeMode = false;
@@ -66,6 +65,9 @@
     let originalImageDimensions = { width: 0, height: 0 };
     let cropData: { left: number; top: number; width: number; height: number } | null = null;
     let isCropped = false;
+
+    // Sidebar visibility state
+    let sidebarVisible: boolean = true;
 
     export function isDirty() {
         if (!canvasEditorRef || typeof canvasEditorRef.getHistoryIndex !== 'function') return false;
@@ -913,33 +915,6 @@
     async function handleToolChange(e: any) {
         const t = e.detail.tool;
         activeTool = t;
-        // show popup for tools that have a submenu
-        const hasSubmenu = [
-            'shape',
-            'arrow',
-            'brush',
-            'eraser',
-            'mosaic',
-            'text',
-            'transform',
-            'number-marker',
-            'crop',
-            'image-border',
-            'align',
-            'canvas',
-            'image',
-        ].includes(t);
-        showToolPopup = hasSubmenu;
-        // Only update popup position on first open (before user drags it)
-        if (hasSubmenu && !popupPositioned) {
-            await updatePopupPosition();
-            popupPositioned = true;
-            // Also fit image to viewport on first sidebar open to avoid being cut off
-            await tick();
-            if (canvasEditorRef && typeof canvasEditorRef.fitImageToViewport === 'function') {
-                canvasEditorRef.fitImageToViewport();
-            }
-        }
         if (canvasEditorRef && typeof canvasEditorRef.setTool === 'function') {
             if (t === 'shape') {
                 const shapeType = e.detail.shape || 'rect';
@@ -1263,11 +1238,6 @@
                                     // Auto-activate shape tool
                                     activeTool = 'shape';
                                     activeShape = shapeType;
-                                    showToolPopup = true;
-                                    if (!popupPositioned) {
-                                        await updatePopupPosition();
-                                        popupPositioned = true;
-                                    }
                                     try {
                                         if (
                                             canvasEditorRef &&
@@ -1292,11 +1262,6 @@
                                 if (shouldAutoActivate) {
                                     // Auto-activate text tool
                                     activeTool = 'text';
-                                    showToolPopup = true;
-                                    if (!popupPositioned) {
-                                        await updatePopupPosition();
-                                        popupPositioned = true;
-                                    }
                                     try {
                                         if (
                                             canvasEditorRef &&
@@ -1314,11 +1279,6 @@
                                 if (shouldAutoActivate) {
                                     // Auto-activate arrow tool
                                     activeTool = 'arrow';
-                                    showToolPopup = true;
-                                    if (!popupPositioned) {
-                                        await updatePopupPosition();
-                                        popupPositioned = true;
-                                    }
                                     try {
                                         if (
                                             canvasEditorRef &&
@@ -1336,11 +1296,6 @@
                                 if (shouldAutoActivate) {
                                     // Auto-activate number-marker tool
                                     activeTool = 'number-marker';
-                                    showToolPopup = true;
-                                    if (!popupPositioned) {
-                                        await updatePopupPosition();
-                                        popupPositioned = true;
-                                    }
                                 }
 
                                 // Save settings if number-marker tool is active
@@ -1351,11 +1306,6 @@
                                 if (shouldAutoActivate) {
                                     // Auto-activate mosaic tool
                                     activeTool = 'mosaic';
-                                    showToolPopup = true;
-                                    if (!popupPositioned) {
-                                        await updatePopupPosition();
-                                        popupPositioned = true;
-                                    }
                                     try {
                                         if (
                                             canvasEditorRef &&
@@ -1373,11 +1323,6 @@
                                 if (shouldAutoActivate) {
                                     // Auto-activate image tool
                                     activeTool = 'image';
-                                    showToolPopup = true;
-                                    if (!popupPositioned) {
-                                        await updatePopupPosition();
-                                        popupPositioned = true;
-                                    }
                                     try {
                                         if (
                                             canvasEditorRef &&
@@ -1418,20 +1363,21 @@
             />
         </div>
 
-        {#if activeTool && showToolPopup}
+        {#if sidebarVisible}
             <div class="tool-sidebar" role="dialog" aria-label="Tool sidebar">
                 <div class="tool-sidebar-header">
                     <div class="title">
-                        {#if activeTool === 'shape'}
-                            {activeShape === 'rect'
-                                ? '矩形设置'
-                                : activeShape === 'circle' || activeShape === 'ellipse'
-                                  ? '椭圆设置'
-                                  : '形状设置'}
-                        {:else if activeTool === 'arrow'}
-                            箭头设置
-                        {:else if activeTool === 'brush'}
-                            画笔设置
+                        {#if activeTool}
+                            {#if activeTool === 'shape'}
+                                {activeShape === 'rect'
+                                    ? '矩形设置'
+                                    : activeShape === 'circle' || activeShape === 'ellipse'
+                                      ? '椭圆设置'
+                                      : '形状设置'}
+                            {:else if activeTool === 'arrow'}
+                                箭头设置
+                            {:else if activeTool === 'brush'}
+                                画笔设置
                         {:else if activeTool === 'eraser'}
                             橡皮设置
                         {:else if activeTool === 'number-marker'}
@@ -1452,25 +1398,31 @@
                             画布设置
                         {:else if activeTool === 'image'}
                             图片工具
+                        {:else if activeTool === 'select'}
+                            选择工具
                         {:else}
                             {activeTool}
+                        {/if}
+                        {:else}
+                            未选择形状工具
                         {/if}
                     </div>
                     <button
                         class="close"
                         on:click={() => {
-                            showToolPopup = false;
+                            sidebarVisible = false;
                         }}
                     >
                         ×
                     </button>
                 </div>
                 <div class="tool-sidebar-body">
-                    <ToolSettings
-                        tool={activeTool}
-                        settings={toolSettings}
-                        recentColors={settings.recentColors || {}}
-                        {selectCanvasSizeMode}
+                    {#if activeTool}
+                        <ToolSettings
+                            tool={activeTool}
+                            settings={toolSettings}
+                            recentColors={settings.recentColors || {}}
+                            {selectCanvasSizeMode}
                         on:action={e => {
                             const { action } = e.detail;
                             try {
@@ -1590,6 +1542,7 @@
                             dispatch('saveSettings', settings);
                         }}
                     />
+                    {/if}
                 </div>
             </div>
         {/if}
