@@ -3845,13 +3845,24 @@
 
     export function getToolOptions() {
         if (activeTool === 'number-marker') {
-            return {
-                ...(activeToolOptions || {}),
-                fontSize: activeToolOptions?.fontSize || 20, // default
-                count: currentNumber,
-                nextNumber: currentNumber, // If selection active, this value might be overridden by updated logic below to show global next
-                isSelection: false,
-            };
+            const active = canvas?.getActiveObject();
+            if (active && active.type === 'number-marker') {
+                return {
+                    count: active.count,
+                    textColor: active.textColor,
+                    fontSize: active.fontSize,
+                    nextNumber: currentNumber,
+                    isSelection: true,
+                };
+            } else {
+                return {
+                    ...(activeToolOptions || {}),
+                    fontSize: activeToolOptions?.fontSize || 20, // default
+                    count: currentNumber,
+                    nextNumber: currentNumber, // If selection active, this value might be overridden by updated logic below to show global next
+                    isSelection: false,
+                };
+            }
         }
 
         // For canvas/transform tools, if width/height are not set, return current project dimensions
