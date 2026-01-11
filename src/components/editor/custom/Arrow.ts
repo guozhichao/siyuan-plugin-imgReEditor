@@ -353,9 +353,47 @@ export class Arrow extends Line {
         const yDiff = localYDiff * this.scaleY;
         const visualAngle = Math.atan2(yDiff, xDiff);
         const visualLength = Math.sqrt(xDiff * xDiff + yDiff * yDiff);
+        // Calculate control point in the rotated coordinate system
+        // controlOffsetX/Y are already relative to center (0,0)
+        const controlXLocal = this.controlOffsetX;
+        const controlYLocal = this.controlOffsetY;
+        // Transform control point to match the rotated canvas
+        const cosA = Math.cos(-visualAngle);
+        const sinA = Math.sin(-visualAngle);
+        const rotatedControlX =
+            controlXLocal * this.scaleX * cosA - controlYLocal * this.scaleY * sinA;
+        const rotatedControlY =
+            controlXLocal * this.scaleX * sinA + controlYLocal * this.scaleY * cosA;
+        // Check if the arrow is curved (control point is not on the line)
+        const isCurved = Math.abs(rotatedControlY) > 0.1;
+
+        // Helper to get point on quadratic bezier curve at parameter t (0 to 1)
+        const getPoint = (t: number) => {
+            const x =
+                (-visualLength / 2) * (1 - t) * (1 - t) +
+                rotatedControlX * 2 * (1 - t) * t +
+                (visualLength / 2) * t * t;
+            const y = 2 * (1 - t) * t * rotatedControlY;
+            return { x, y };
+        };
+
+        // Helper to get normalized tangent at parameter t
+        const getTangent = (t: number) => {
+            if (!isCurved) {
+                return { x: 1, y: 0 };
+            }
+            // P'(t) = 2(1-t)(P1-P0) + 2t(P2-P1)
+            const dx =
+                2 * (1 - t) * (rotatedControlX - -visualLength / 2) +
+                2 * t * (visualLength / 2 - rotatedControlX);
+            const dy = 2 * (1 - t) * rotatedControlY + 2 * t * -rotatedControlY;
+            const mag = Math.sqrt(dx * dx + dy * dy);
+            return mag === 0 ? { x: 1, y: 0 } : { x: dx / mag, y: dy / mag };
+        };
+
         // Arrow head size based on visual stroke width
-        const headLength = Math.max(10, visualStrokeWidth * 2.5);
-        const headWidth = Math.max(6, visualStrokeWidth * 1.5);
+        const headLength = Math.max(10, visualStrokeWidth * 5.5);
+        const headWidth = Math.max(6, visualStrokeWidth * 2.5);
         ctx.rotate(visualAngle);
         // Set common styles
         ctx.strokeStyle = this.stroke as string;
@@ -381,20 +419,106 @@ export class Arrow extends Line {
             ctx.lineJoin = 'miter';
             ctx.miterLimit = 10;
             ctx.beginPath();
+
             const dir = this.arrowHead === 'right' ? 1 : -1;
             const L = visualLength;
-            // Calculate key points
-            const tipX = (L / 2) * dir;
-            const startX = (-L / 2) * dir;
-            const neckX = tipX - indent * dir;
-            const wingX = tipX - hL * dir;
-            ctx.moveTo(tipX, 0);
-            ctx.lineTo(wingX, hW);
-            ctx.lineTo(neckX, bWNeck / 2);
-            ctx.lineTo(startX, bWStart / 2);
-            ctx.lineTo(startX, -bWStart / 2);
-            ctx.lineTo(neckX, -bWNeck / 2);
-            ctx.lineTo(wingX, -hW);
+
+            const tTip = dir === 1 ? 1 : 0;
+            const tStart = dir === 1 ? 0 : 1;
+            // Use a slightly more accurate estimate for t at the neck indent
+            const tNeck = dir === 1 ? Math.max(0, 1 - indent / visualLength) : Math.min(1, indent / visualLength);
+
+            if (isCurved) {
+                const steps = 50; // Increased steps for smoother curves
+
+                const tip = getPoint(tTip);
+                const tanTip = getTangent(tTip);
+                const normTip = { x: -tanTip.y, y: tanTip.x };
+
+                const start = getPoint(tStart);
+                const tanStart = getTangent(tStart);
+                const normStart = { x: -tanStart.y, y: tanStart.x };
+
+                // direction factor for head elements: head points 'away' from tip relative to tangent
+                const hDir = dir === 1 ? -1 : 1;
+
+                // --- RIGID HEAD CALCULATION ---
+                // All head points are calculated relative to the Tip and its tangent
+                // to ensure the triangle/swallowtail is NOT deformed by the curve.
+                const wing1 = {
+                    x: tip.x + hDir * tanTip.x * hL + normTip.x * hW,
+                    y: tip.y + hDir * tanTip.y * hL + normTip.y * hW,
+                };
+                const wing2 = {
+                    x: tip.x + hDir * tanTip.x * hL - normTip.x * hW,
+                    y: tip.y + hDir * tanTip.y * hL - normTip.y * hW,
+                };
+
+                // Use Tip's tangent for Neck as well to keep the head shape rigid
+                const neck1 = {
+                    x: tip.x + hDir * tanTip.x * indent + normTip.x * (bWNeck / 2),
+                    y: tip.y + hDir * tanTip.y * indent + normTip.y * (bWNeck / 2),
+                };
+                const neck2 = {
+                    x: tip.x + hDir * tanTip.x * indent - normTip.x * (bWNeck / 2),
+                    y: tip.y + hDir * tanTip.y * indent - normTip.y * (bWNeck / 2),
+                };
+
+                // Rigid Start Points (flat end perpendicular to start tangent)
+                const start1 = {
+                    x: start.x + normStart.x * (bWStart / 2),
+                    y: start.y + normStart.y * (bWStart / 2),
+                };
+                const start2 = {
+                    x: start.x - normStart.x * (bWStart / 2),
+                    y: start.y - normStart.y * (bWStart / 2),
+                };
+
+                ctx.moveTo(tip.x, tip.y);
+                ctx.lineTo(wing1.x, wing1.y);
+                ctx.lineTo(neck1.x, neck1.y);
+
+                // Stem Bottom (Neck1 -> Start1)
+                // We transition from the rigid neck point to the curve's profile
+                for (let i = 1; i < steps; i++) {
+                    const f = i / steps;
+                    const t = tNeck * (1 - f) + tStart * f;
+                    const p = getPoint(t);
+                    const tan = getTangent(t);
+                    const norm = { x: -tan.y, y: tan.x };
+                    const w = bWNeck * (1 - f) + bWStart * f;
+                    ctx.lineTo(p.x + norm.x * (w / 2), p.y + norm.y * (w / 2));
+                }
+                ctx.lineTo(start1.x, start1.y);
+                ctx.lineTo(start2.x, start2.y);
+
+                // Stem Top (Start2 -> Neck2)
+                for (let i = 1; i < steps; i++) {
+                    const f = i / steps;
+                    const t = tStart * (1 - f) + tNeck * f;
+                    const p = getPoint(t);
+                    const tan = getTangent(t);
+                    const norm = { x: -tan.y, y: tan.x };
+                    const w = bWStart * (1 - f) + bWNeck * f;
+                    ctx.lineTo(p.x - norm.x * (w / 2), p.y - norm.y * (w / 2));
+                }
+                ctx.lineTo(neck2.x, neck2.y);
+                ctx.lineTo(wing2.x, wing2.y);
+            } else {
+                // Calculate key points
+                const tipX = (L / 2) * dir;
+                const startX = (-L / 2) * dir;
+                const neckX = tipX - indent * dir;
+                const wingX = tipX - hL * dir;
+                ctx.moveTo(tipX, 0);
+                ctx.lineTo(wingX, hW);
+                ctx.lineTo(neckX, bWNeck / 2);
+                ctx.lineTo(startX, bWStart / 2);
+                ctx.lineTo(startX, -bWStart / 2);
+                ctx.lineTo(neckX, -bWNeck / 2);
+                ctx.lineTo(wingX, -hW);
+            }
+
             ctx.closePath();
             const dashes = this.getDashArray(visualStrokeWidth);
             if (dashes.length > 0) ctx.setLineDash(dashes);
@@ -407,40 +531,35 @@ export class Arrow extends Line {
         const isVarying =
             this.thicknessStyle === 'varying' &&
             (this.arrowHead === 'left' || this.arrowHead === 'right');
-        // Calculate control point in the rotated coordinate system
-        // controlOffsetX/Y are already relative to center (0,0)
-        const controlXLocal = this.controlOffsetX;
-        const controlYLocal = this.controlOffsetY;
-        // Transform control point to match the rotated canvas
-        const cosA = Math.cos(-visualAngle);
-        const sinA = Math.sin(-visualAngle);
-        const rotatedControlX = controlXLocal * this.scaleX * cosA - controlYLocal * this.scaleY * sinA;
-        const rotatedControlY = controlXLocal * this.scaleX * sinA + controlYLocal * this.scaleY * cosA;
-        // Check if the arrow is curved (control point is not on the line)
-        const isCurved = Math.abs(rotatedControlY) > 0.1;
+
         if (isVarying) {
             // Draw tapered line as a filled polygon
             const startWidth = this.arrowHead === 'right' ? visualStrokeWidth * 0.2 : visualStrokeWidth;
-            const endWidth = this.arrowHead === 'right' ? visualStrokeWidth : visualStrokeWidth * 0.2;
+            const endWidth =
+                this.arrowHead === 'right' ? visualStrokeWidth : visualStrokeWidth * 0.2;
             ctx.beginPath();
             if (isCurved) {
                 // For curved varying thickness, approximate with line segments
-                const steps = 20;
+                const steps = 50;
                 for (let i = 0; i <= steps; i++) {
                     const t = i / steps;
-                    const x = -visualLength / 2 * (1 - t) * (1 - t) + rotatedControlX * 2 * (1 - t) * t + visualLength / 2 * t * t;
+                    const p = getPoint(t);
+                    const tan = getTangent(t);
+                    const norm = { x: -tan.y, y: tan.x };
                     const width = startWidth * (1 - t) + endWidth * t;
                     if (i === 0) {
-                        ctx.moveTo(x, -width / 2);
+                        ctx.moveTo(p.x + norm.x * (width / 2), p.y + norm.y * (width / 2));
                     } else {
-                        ctx.lineTo(x, -width / 2);
+                        ctx.lineTo(p.x + norm.x * (width / 2), p.y + norm.y * (width / 2));
                     }
                 }
                 for (let i = steps; i >= 0; i--) {
                     const t = i / steps;
-                    const x = -visualLength / 2 * (1 - t) * (1 - t) + rotatedControlX * 2 * (1 - t) * t + visualLength / 2 * t * t;
+                    const p = getPoint(t);
+                    const tan = getTangent(t);
+                    const norm = { x: -tan.y, y: tan.x };
                     const width = startWidth * (1 - t) + endWidth * t;
-                    ctx.lineTo(x, width / 2);
+                    ctx.lineTo(p.x - norm.x * (width / 2), p.y - norm.y * (width / 2));
                 }
             } else {
                 ctx.moveTo(-visualLength / 2, -startWidth / 2);
