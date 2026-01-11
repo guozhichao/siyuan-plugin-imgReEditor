@@ -365,7 +365,7 @@ export class Arrow extends Line {
         const rotatedControlY =
             controlXLocal * this.scaleX * sinA + controlYLocal * this.scaleY * cosA;
         // Check if the arrow is curved (control point is not on the line)
-        const isCurved = Math.abs(rotatedControlY) > 0.1;
+        const isCurved = Math.abs(this.controlOffsetX) > 0.1 || Math.abs(this.controlOffsetY) > 0.1;
 
         // Helper to get point on quadratic bezier curve at parameter t (0 to 1)
         const getPoint = (t: number) => {
@@ -391,9 +391,9 @@ export class Arrow extends Line {
             return mag === 0 ? { x: 1, y: 0 } : { x: dx / mag, y: dy / mag };
         };
 
-        // Arrow head size based on visual stroke width
-        const headLength = Math.max(10, visualStrokeWidth * 5.5);
-        const headWidth = Math.max(6, visualStrokeWidth * 2.5);
+        // Arrow head size based on original stroke width to prevent disappearing at certain angles
+        const headLength = Math.max(10, this.strokeWidth * 5.5);
+        const headWidth = Math.max(6, this.strokeWidth * 2.5);
         ctx.rotate(visualAngle);
         // Set common styles
         ctx.strokeStyle = this.stroke as string;
@@ -407,15 +407,15 @@ export class Arrow extends Line {
             // Draw the entire arrow as a single closed path (Contour)
             const style = this.headStyle.replace('-hollow', '');
             // Increased multipliers for a much larger hollow area
-            const hL = Math.max(10, visualStrokeWidth * 7.5);
-            const hW = Math.max(6, visualStrokeWidth * 3.5);
+            const hL = Math.max(10, this.strokeWidth * 7.5);
+            const hW = Math.max(6, this.strokeWidth * 3.5);
             // For sharp triangle, the neck point is at the same X as the wings (flat back)
             // For swallowtail, the neck is indented towards the tip
             const indent = style === 'swallowtail' ? hL * 0.75 : hL;
-            const bWNeck = visualStrokeWidth * 2.0;
-            const bWStart = this.thicknessStyle === 'varying' ? visualStrokeWidth * 0.2 : bWNeck;
+            const bWNeck = this.strokeWidth * 2.0;
+            const bWStart = this.thicknessStyle === 'varying' ? this.strokeWidth * 0.2 : bWNeck;
             // Use a thinner stroke for the outline in hollow mode to match user expectation
-            ctx.lineWidth = Math.max(1, visualStrokeWidth * 0.4);
+            ctx.lineWidth = Math.max(1, this.strokeWidth * 0.4);
             ctx.lineJoin = 'miter';
             ctx.miterLimit = 10;
             ctx.beginPath();
@@ -534,9 +534,9 @@ export class Arrow extends Line {
 
         if (isVarying) {
             // Draw tapered line as a filled polygon
-            const startWidth = this.arrowHead === 'right' ? visualStrokeWidth * 0.2 : visualStrokeWidth;
+            const startWidth = this.arrowHead === 'right' ? this.strokeWidth * 0.2 : this.strokeWidth;
             const endWidth =
-                this.arrowHead === 'right' ? visualStrokeWidth : visualStrokeWidth * 0.2;
+                this.arrowHead === 'right' ? this.strokeWidth : this.strokeWidth * 0.2;
             ctx.beginPath();
             if (isCurved) {
                 // For curved varying thickness, approximate with line segments
@@ -597,18 +597,9 @@ export class Arrow extends Line {
             ctx.translate(x, 0);
             // Calculate tangent angle at the endpoint for curved arrows
             if (isCurved) {
-                let tangentAngle = 0;
-                if (direction === 1) {
-                    // Right endpoint (p2) - tangent at t=1
-                    const dx = visualLength / 2 - rotatedControlX;
-                    const dy = -rotatedControlY;
-                    tangentAngle = Math.atan2(dy, dx);
-                } else {
-                    // Left endpoint (p1) - tangent at t=0
-                    const dx = rotatedControlX - (-visualLength / 2);
-                    const dy = rotatedControlY;
-                    tangentAngle = Math.atan2(dy, dx);
-                }
+                const t = direction === 1 ? 1 : 0;
+                const tangent = getTangent(t);
+                const tangentAngle = Math.atan2(tangent.y, tangent.x);
                 ctx.rotate(tangentAngle);
             }
             const isHollow = this.headStyle.endsWith('-hollow');
