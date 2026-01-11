@@ -115,44 +115,34 @@ function p2PositionHandler(_dim: any, finalMatrix: any, fabricObject: any) {
     }
     return canvasPoint;
 }
-// Delete control position handler - positioned at the 1/4 position of the arrow
+// Delete control position handler - positioned at the top-right corner of the p2 endpoint
 function deletePositionHandler(_dim: any, finalMatrix: any, fabricObject: any) {
     const arrow = fabricObject as any;
     const canvas = arrow.canvas;
 
-    const isCurved = Math.abs(arrow.controlOffsetX) > 0.1 || Math.abs(arrow.controlOffsetY) > 0.1;
-    let localPoint: Point;
-
-    if (isCurved) {
-        // Calculate point on curve at t=0.25
-        const t = 0.25;
-        const centerX = (arrow.x1 + arrow.x2) / 2;
-        const centerY = (arrow.y1 + arrow.y2) / 2;
-        const p1x = centerX + arrow.controlOffsetX;
-        const p1y = centerY + arrow.controlOffsetY;
-        const x = Math.pow(1 - t, 2) * arrow.x1 +
-            2 * (1 - t) * t * p1x +
-            Math.pow(t, 2) * arrow.x2;
-        const y = Math.pow(1 - t, 2) * arrow.y1 +
-            2 * (1 - t) * t * p1y +
-            Math.pow(t, 2) * arrow.y2;
-        localPoint = new Point(x - centerX, y - centerY);
-    } else {
-        // Straight line 1/4 position
-        const x = arrow.x1 + (arrow.x2 - arrow.x1) * 0.25;
-        const y = arrow.y1 + (arrow.y2 - arrow.y1) * 0.25;
-        const centerX = (arrow.x1 + arrow.x2) / 2;
-        const centerY = (arrow.y1 + arrow.y2) / 2;
-        localPoint = new Point(x - centerX, y - centerY);
-    }
+    // Get p2 endpoint position (same as p2PositionHandler)
+    const centerX = (arrow.x1 + arrow.x2) / 2;
+    const centerY = (arrow.y1 + arrow.y2) / 2;
+    const localPoint = new Point(arrow.x2 - centerX, arrow.y2 - centerY);
 
     // Transform to canvas coordinates
     const canvasPoint = util.transformPoint(localPoint, arrow.calcTransformMatrix());
+
+    // Offset to top-right corner (offset by control size / 2 + some margin)
+    const offset = 15; // Adjust this value to control distance from endpoint
+    const topRightOffset = new Point(offset, -offset);
+
+    // Apply the offset
+    const finalPoint = new Point(
+        canvasPoint.x + topRightOffset.x,
+        canvasPoint.y + topRightOffset.y
+    );
+
     // Apply viewport transform to screen coordinates
     if (canvas && canvas.viewportTransform) {
-        return util.transformPoint(canvasPoint, canvas.viewportTransform);
+        return util.transformPoint(finalPoint, canvas.viewportTransform);
     }
-    return canvasPoint;
+    return finalPoint;
 }
 // Center control point position handler for curve control
 function centerControlPositionHandler(_dim: any, finalMatrix: any, fabricObject: any) {
