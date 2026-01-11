@@ -4373,13 +4373,21 @@
 
             await canvas.loadFromJSON(json);
 
+            // Handle legacy canvas background objects (for backward compatibility)
+            let legacyFill = null;
+            const legacyBgObj = canvas.getObjects().find((o: any) => o._isCanvasBackground);
+            if (legacyBgObj) {
+                legacyFill = legacyBgObj.fill && legacyBgObj.fill.toObject ? legacyBgObj.fill.toObject() : legacyBgObj.fill;
+                canvas.remove(legacyBgObj);
+            }
+
             // For canvas mode, restore workspace dimensions (canvas size) and add boundary
             if (isCanvasMode) {
                 canvas.setDimensions({ width: currentWidth, height: currentHeight });
 
                 const w = json.width || currentWidth;
                 const h = json.height || currentHeight;
-                const bgFill = json.bgFill || 'transparent';
+                const bgFill = legacyFill || json.bgFill || 'transparent';
 
                 // Remove any existing boundary
                 const existingBoundary = canvas
@@ -4425,6 +4433,7 @@
                     boundaryRect.set('fill', bgFill);
                 }
             }
+
 
             // Resume number marker sequence if existing markers are found
             updateCurrentNumberFromCanvas();
