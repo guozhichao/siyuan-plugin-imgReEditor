@@ -1632,8 +1632,8 @@
         height: 100%;
         box-sizing: border-box;
         background: rgba(255, 255, 255, 0.98);
-        border-left: 1px solid rgba(0,0,0,0.06);
-        box-shadow: -6px 0 18px rgba(0,0,0,0.06);
+        border-left: 1px solid rgba(0, 0, 0, 0.06);
+        box-shadow: -6px 0 18px rgba(0, 0, 0, 0.06);
         display: flex;
         flex-direction: column;
         z-index: 900;
@@ -1644,7 +1644,7 @@
         align-items: center;
         justify-content: space-between;
         padding: 10px 12px;
-        border-bottom: 1px solid rgba(0,0,0,0.04);
+        border-bottom: 1px solid rgba(0, 0, 0, 0.04);
         background: transparent;
     }
     .tool-sidebar .title {
