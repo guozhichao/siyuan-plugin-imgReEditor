@@ -3569,7 +3569,9 @@
                 canvas.setDimensions({ width: w, height: h });
 
                 // Remove any existing boundary before loading JSON to avoid duplicates
-                const existingBoundaryPre = canvas.getObjects().find((o: any) => o._isCanvasBackground);
+                const existingBoundaryPre = canvas
+                    .getObjects()
+                    .find((o: any) => o._isCanvasBackground);
                 if (existingBoundaryPre) canvas.remove(existingBoundaryPre);
             }
 
@@ -3582,10 +3584,18 @@
                 const bgFill = (json && json.bgFill) || 'transparent';
 
                 // If JSON included a boundary, update it; otherwise create one
-                const existingBoundary = canvas.getObjects().find((o: any) => o._isCanvasBackground);
+                const existingBoundary = canvas
+                    .getObjects()
+                    .find((o: any) => o._isCanvasBackground);
                 if (existingBoundary) {
                     try {
-                        existingBoundary.set({ left: 0, top: 0, width: w, height: h, fill: bgFill });
+                        existingBoundary.set({
+                            left: 0,
+                            top: 0,
+                            width: w,
+                            height: h,
+                            fill: bgFill,
+                        });
                         existingBoundary.setCoords && existingBoundary.setCoords();
                         canvas.sendObjectToBack(existingBoundary);
                     } catch (e) {}
@@ -3675,7 +3685,9 @@
                 const w = json?.width || currentWidth;
                 const h = json?.height || currentHeight;
                 canvas.setDimensions({ width: w, height: h });
-                const existingBoundaryPre = canvas.getObjects().find((o: any) => o._isCanvasBackground);
+                const existingBoundaryPre = canvas
+                    .getObjects()
+                    .find((o: any) => o._isCanvasBackground);
                 if (existingBoundaryPre) canvas.remove(existingBoundaryPre);
             }
 
@@ -3687,10 +3699,18 @@
                 const h = json?.height || currentHeight;
                 const bgFill = (json && json.bgFill) || 'transparent';
 
-                const existingBoundary = canvas.getObjects().find((o: any) => o._isCanvasBackground);
+                const existingBoundary = canvas
+                    .getObjects()
+                    .find((o: any) => o._isCanvasBackground);
                 if (existingBoundary) {
                     try {
-                        existingBoundary.set({ left: 0, top: 0, width: w, height: h, fill: bgFill });
+                        existingBoundary.set({
+                            left: 0,
+                            top: 0,
+                            width: w,
+                            height: h,
+                            fill: bgFill,
+                        });
                         existingBoundary.setCoords && existingBoundary.setCoords();
                         canvas.sendObjectToBack(existingBoundary);
                     } catch (e) {}
@@ -3751,7 +3771,9 @@
                 const bgFill = json.bgFill || 'transparent';
 
                 // Remove any existing boundary
-                const existingBoundary = canvas.getObjects().find((o: any) => o._isCanvasBackground);
+                const existingBoundary = canvas
+                    .getObjects()
+                    .find((o: any) => o._isCanvasBackground);
                 if (existingBoundary) {
                     canvas.remove(existingBoundary);
                 }
@@ -3848,8 +3870,10 @@
             const opts = { ...(activeToolOptions || {}) };
             if (typeof opts.width === 'undefined' || typeof opts.height === 'undefined') {
                 if (canvas) {
-                        if (isCanvasMode) {
-                        const boundary = canvas.getObjects().find((o: any) => o._isCanvasBackground);
+                    if (isCanvasMode) {
+                        const boundary = canvas
+                            .getObjects()
+                            .find((o: any) => o._isCanvasBackground);
                         if (boundary) {
                             opts.width = Math.round(boundary.width);
                             opts.height = Math.round(boundary.height);
@@ -4328,7 +4352,9 @@
 
         // Filter out canvas boundary and background objects from history to prevent them from being undone
         if (json.objects) {
-            json.objects = json.objects.filter((obj: any) => obj.type !== 'canvas-boundary' && obj.type !== 'canvas-background');
+            json.objects = json.objects.filter(
+                (obj: any) => obj.type !== 'canvas-boundary' && obj.type !== 'canvas-background'
+            );
         }
         return json;
     }
@@ -4355,7 +4381,9 @@
                 const bgFill = json.bgFill || 'transparent';
 
                 // Remove any existing boundary
-                const existingBoundary = canvas.getObjects().find((o: any) => o._isCanvasBackground);
+                const existingBoundary = canvas
+                    .getObjects()
+                    .find((o: any) => o._isCanvasBackground);
                 if (existingBoundary) {
                     canvas.remove(existingBoundary);
                 }
@@ -4528,7 +4556,9 @@
             // 2. Rotate all drawable objects relative to the same center
             const objs = canvas
                 .getObjects()
-                .filter(o => o !== bg && !(o as any)._isCropRect && !(o as any)._isCanvasBackground);
+                .filter(
+                    o => o !== bg && !(o as any)._isCropRect && !(o as any)._isCanvasBackground
+                );
             objs.forEach((o: any) => {
                 // Coordinate rotation: (x', y') around (cx, cy)
                 const p = o.getCenterPoint();
@@ -4912,7 +4942,9 @@
         if (!canvas || !isCanvasMode) return;
 
         let bgNode = canvas.getObjects().find((o: any) => (o as any)._isCanvasBackground) as Rect;
-        const boundary = canvas.getObjects().find((o: any) => (o as any)._isCanvasBackground) as Rect;
+        const boundary = canvas
+            .getObjects()
+            .find((o: any) => (o as any)._isCanvasBackground) as Rect;
 
         const w = boundary ? boundary.width : (canvas as any).width || 800;
         const h = boundary ? boundary.height : (canvas as any).height || 600;
@@ -4955,7 +4987,10 @@
             } catch (e) {
                 bgNode.set('fill', '#ffffff');
             }
-        } else if (typeof effectiveFill === 'string' && effectiveFill.startsWith('linear-gradient')) {
+        } else if (
+            typeof effectiveFill === 'string' &&
+            effectiveFill.startsWith('linear-gradient')
+        ) {
             const match = fill.match(
                 /linear-gradient\((\d+)deg,\s*(#[a-fA-F0-9]{3,6})\s+0%,\s*(#[a-fA-F0-9]{3,6})\s+100%\)/i
             );
