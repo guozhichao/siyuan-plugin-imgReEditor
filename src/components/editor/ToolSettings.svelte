@@ -221,13 +221,12 @@
             <label for="stroke-width">描边宽度</label>
             <input
                 id="stroke-width"
-                type="range"
+                type="number"
                 min="1"
-                max="20"
+                max="100"
                 value={settings.strokeWidth || 2}
                 on:input={e => emitChange({ strokeWidth: +getValue(e) })}
             />
-            <span class="val">{settings.strokeWidth || 2}</span>
         </div>
         <div class="row">
             <label for="fill-en">填充</label>
@@ -277,20 +276,19 @@
             <label for="brush-size">粗细</label>
             <input
                 id="brush-size"
-                type="range"
+                type="number"
                 min="1"
-                max="80"
+                max="100"
                 value={settings.strokeWidth || settings.size || 4}
                 on:input={e => emitChange({ strokeWidth: +getValue(e), size: +getValue(e) })}
             />
-            <span class="val">{settings.strokeWidth || settings.size || 4}</span>
         </div>
     {:else if tool === 'eraser'}
         <div class="row">
             <label for="eraser-size">粗细</label>
             <input
                 id="eraser-size"
-                type="range"
+                type="number"
                 min="1"
                 max="100"
                 value={settings.strokeWidth || settings.size || 16}
@@ -313,13 +311,12 @@
             <label for="arrow-width">粗细</label>
             <input
                 id="arrow-width"
-                type="range"
+                type="number"
                 min="1"
                 max="50"
                 value={settings.strokeWidth || 4}
                 on:input={e => emitChange({ strokeWidth: +getValue(e) })}
             />
-            <span class="val">{settings.strokeWidth || 4}</span>
         </div>
         <div class="row">
             <label for="arrow-head">箭头位置</label>
@@ -431,13 +428,12 @@
             <label for="font-size">字号</label>
             <input
                 id="font-size"
-                type="range"
+                type="number"
                 min="8"
                 max="120"
                 value={settings.size || settings.fontSize || 24}
                 on:input={e => emitChange({ size: +getValue(e) })}
             />
-            <span class="val">{settings.size || settings.fontSize || 24}</span>
         </div>
         <div class="row">
             <span class="label">样式</span>
@@ -491,7 +487,6 @@
                 value={settings.strokeWidth || 0}
                 on:input={e => emitChange({ strokeWidth: +getValue(e) })}
             />
-            <span class="val">{settings.strokeWidth || 0}</span>
         </div>
     {:else if tool === 'number-marker'}
         <div class="row">
