@@ -261,77 +261,77 @@
             <path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13" />
         </svg>
     </button>
-    <div class="toolbar-spacer"></div>
+    <div class="toolbar-right">
+        {#if isScreenshotMode}
+            <button
+                class="b3-button b3-button--outline"
+                on:click={() => emit('copy-file')}
+                title="复制图片文件"
+            >
+                <svg class="icon" viewBox="0 0 24 24">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                </svg>
+            </button>
+            <button
+                class="b3-button b3-button--outline"
+                on:click={() => emit('save-as')}
+                title="另存为"
+            >
+                <svg class="fill-icon" viewBox="0 0 1024 1024">
+                    <path
+                        d="M896 960H128c-35.3 0-64-28.7-64-64V128c0-35.3 28.7-64 64-64h544l288 288v544c0 35.3-28.7 64-64 64zM128 128v768h768V416H640V128H128z"
+                    />
+                    <path d="M640 128l288 288v64H640z" />
+                </svg>
+            </button>
+            <button
+                class="b3-button b3-button--outline"
+                on:click={() => emit('history')}
+                title="截图历史"
+            >
+                <svg class="icon" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="10" />
+                    <polyline points="12,6 12,12 16,14" />
+                </svg>
+            </button>
+        {/if}
 
-    {#if isScreenshotMode}
         <button
             class="b3-button b3-button--outline"
-            on:click={() => emit('copy-file')}
-            title="复制图片文件"
+            on:click={() => emit('open-in-tab')}
+            title="在Tab中打开"
         >
             <svg class="icon" viewBox="0 0 24 24">
-                <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                <polyline points="15 3 21 3 21 9" />
+                <line x1="10" y1="14" x2="21" y2="3" />
             </svg>
         </button>
-        <button
-            class="b3-button b3-button--outline"
-            on:click={() => emit('save-as')}
-            title="另存为"
-        >
-            <svg class="fill-icon" viewBox="0 0 1024 1024">
+
+        <button class="b3-button b3-button--outline" on:click={() => emit('pin')} title="贴图">
+            <svg class="icon" viewBox="0 0 24 24">
+                <line x1="12" y1="17" x2="12" y2="22" />
                 <path
-                    d="M896 960H128c-35.3 0-64-28.7-64-64V128c0-35.3 28.7-64 64-64h544l288 288v544c0 35.3-28.7 64-64 64zM128 128v768h768V416H640V128H128z"
+                    d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.79-.9A2 2 0 0 1 15 10.76V6a3 3 0 0 0-3-3 3 3 0 0 0-3 3v4.76a2 2 0 0 1-1.1 1.79l-1.79.9A2 2 0 0 0 5 15.24Z"
                 />
-                <path d="M640 128l288 288v64H640z" />
             </svg>
         </button>
-        <button
-            class="b3-button b3-button--outline"
-            on:click={() => emit('history')}
-            title="截图历史"
-        >
+
+        <button class="b3-button b3-button--outline" on:click={() => emit('save')} title="保存">
             <svg class="icon" viewBox="0 0 24 24">
-                <circle cx="12" cy="12" r="10" />
-                <polyline points="12,6 12,12 16,14" />
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                <polyline points="17,21 17,13 7,13 7,21" />
+                <polyline points="7,3 7,8 15,8" />
             </svg>
         </button>
-    {/if}
-
-    <button
-        class="b3-button b3-button--outline"
-        on:click={() => emit('open-in-tab')}
-        title="在Tab中打开"
-    >
-        <svg class="icon" viewBox="0 0 24 24">
-            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-            <polyline points="15 3 21 3 21 9" />
-            <line x1="10" y1="14" x2="21" y2="3" />
-        </svg>
-    </button>
-
-    <button class="b3-button b3-button--outline" on:click={() => emit('pin')} title="贴图">
-        <svg class="icon" viewBox="0 0 24 24">
-            <line x1="12" y1="17" x2="12" y2="22" />
-            <path
-                d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.79-.9A2 2 0 0 1 15 10.76V6a3 3 0 0 0-3-3 3 3 0 0 0-3 3v4.76a2 2 0 0 1-1.1 1.79l-1.79.9A2 2 0 0 0 5 15.24Z"
-            />
-        </svg>
-    </button>
-
-    <button class="b3-button b3-button--outline" on:click={() => emit('save')} title="保存">
-        <svg class="icon" viewBox="0 0 24 24">
-            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
-            <polyline points="17,21 17,13 7,13 7,21" />
-            <polyline points="7,3 7,8 15,8" />
-        </svg>
-    </button>
-    <button class="b3-button b3-button--outline" on:click={() => emit('cancel')} title="取消">
-        <svg class="icon" viewBox="0 0 24 24">
-            <path d="M18 6L6 18" />
-            <path d="M6 6l12 12" />
-        </svg>
-    </button>
+        <button class="b3-button b3-button--outline" on:click={() => emit('cancel')} title="取消">
+            <svg class="icon" viewBox="0 0 24 24">
+                <path d="M18 6L6 18" />
+                <path d="M6 6l12 12" />
+            </svg>
+        </button>
+    </div>
 </div>
 
 <style>
@@ -353,13 +353,24 @@
         top: 0;
         z-index: 60;
         display: flex;
+        flex-wrap: wrap; /* 窄屏自动换行 */
         gap: 6px;
         padding: 8px;
         border-bottom: 1px solid rgba(0, 0, 0, 0.06);
         align-items: center;
+        overflow: visible; /* 避免出现横向滚动条 */
     }
-    .toolbar-spacer {
-        flex: 1 1 auto;
+    /* 分组在窄屏下也可以内部换行 */
+    .editor-toolbar .shape-group {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+    .toolbar-right {
+        margin-left: auto; /* 将右侧区域推到行尾 */
+        display: flex;
+        flex-wrap: wrap; /* 右侧按钮组也可换行 */
+        gap: 6px;
     }
     .editor-toolbar button {
         padding: 6px 8px;

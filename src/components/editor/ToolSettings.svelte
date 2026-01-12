@@ -1308,9 +1308,12 @@
 <style>
     .tool-settings {
         padding: 8px;
-        width: 240px;
+        /* 宽度由外层侧栏控制，内部使用 100% 并限制最大值以自适应 */
+        width: 100%;
+        max-width: var(--sidebar-w, 420px);
         background: rgba(255, 255, 255, 0.98);
         border-left: 1px solid #eee;
+        box-sizing: border-box;
     }
     .empty {
         color: #888;
@@ -1320,12 +1323,23 @@
         align-items: center;
         gap: 8px;
         margin-bottom: 8px;
+        flex-wrap: wrap; /* 窄屏时换行 */
+    }
+    /* 标签固定占位，控件区域自适应宽度并允许换行 */
+    .row {
+        --label-w: 80px;
     }
     .row label,
     .row .label {
-        width: 80px;
+        flex: 0 0 var(--label-w);
+        min-width: 56px;
         font-size: 13px;
         display: inline-block;
+    }
+    /* 非 label 元素（控件）占据剩余空间并可收缩换行 */
+    .row > :not(label) {
+        flex: 1 1 auto;
+        min-width: 0; /* 允许在窄容器中正确溢出/换行 */
     }
     .val {
         width: 30px;
@@ -1420,8 +1434,11 @@
         background: #fbfbfb;
         border-radius: 8px;
         border: 1px solid #f0f0f0;
-        margin-left: 88px;
-        width: 140px;
+        /* 不再使用固定 margin/width，改为占满控件区域 */
+        margin-left: 0;
+        width: 100%;
+        box-sizing: border-box;
+        align-items: center;
     }
     .preset-btn {
         width: 20px;
