@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { createEventDispatcher, onMount } from 'svelte';
+    import { createEventDispatcher, onMount, onDestroy, tick } from 'svelte';
     import ColorPicker from 'svelte-awesome-color-picker';
 
     export let value: string | null = '#ff0000';
@@ -11,6 +11,20 @@
 
     let showPopup = false;
     let showAwesomePicker = false;
+    let containerEl: HTMLElement | null = null;
+    let popupStyle = { top: 0, left: 0 };
+    const uid = `colorpicker-${Math.random().toString(36).slice(2)}`;
+
+    function onExternalOpen(e: Event) {
+        try {
+            const id = (e as CustomEvent).detail;
+            if (id !== uid) {
+                showPopup = false;
+            }
+        } catch (err) {
+            // ignore
+        }
+    }
 
     // Default color palette
     const defaultColors = [
@@ -39,6 +53,49 @@
         dispatch('change', color);
         addToRecent(color);
         showPopup = false;
+    }
+
+    async function updatePopupPosition() {
+        if (!containerEl) return;
+        await tick();
+        const popupEl = document.querySelector('.color-popup') as HTMLElement | null;
+        if (!popupEl) return;
+
+        const rect = containerEl.getBoundingClientRect();
+        const popupRect = popupEl.getBoundingClientRect();
+
+        let top = rect.bottom + 6; // default below the button
+        let left = rect.left; // align left by default
+
+        // constrain within window by default
+        if (left + popupRect.width > window.innerWidth - 8) {
+            left = Math.max(8, window.innerWidth - popupRect.width - 8);
+        }
+
+        // If there is a right-side tool sidebar, keep popup inside its right edge
+        try {
+            const sidebarEl = document.querySelector('.tool-sidebar') as HTMLElement | null;
+            if (sidebarEl) {
+                const sidebarRect = sidebarEl.getBoundingClientRect();
+                const maxRight = sidebarRect.right - 8; // keep a small margin
+                if (left + popupRect.width > maxRight) {
+                    left = Math.max(sidebarRect.left + 8, maxRight - popupRect.width);
+                }
+                // also ensure not placed left of the sidebar
+                if (left < sidebarRect.left + 8) {
+                    left = sidebarRect.left + 8;
+                }
+            }
+        } catch (e) {
+            // ignore DOM read errors
+        }
+
+        // If popup would overflow bottom edge, show above the button
+        if (top + popupRect.height > window.innerHeight - 8) {
+            top = rect.top - popupRect.height - 6;
+        }
+
+        popupStyle = { top, left };
     }
 
     const isSameColor = (c1: any, c2: any) => {
@@ -75,7 +132,12 @@
 
     function handleClickOutside(e: MouseEvent) {
         const target = e.target as HTMLElement;
-        if (!target.closest('.color-picker-container') && !target.closest('.awesome-popup')) {
+        // allow clicks inside the picker or awesome popup
+        if (
+            !target.closest('.color-picker-container') &&
+            !target.closest('.color-popup') &&
+            !target.closest('.awesome-popup')
+        ) {
             addToRecent(value);
             showPopup = false;
             showAwesomePicker = false;
@@ -84,17 +146,37 @@
 
     onMount(() => {
         document.addEventListener('click', handleClickOutside);
+        window.addEventListener('resize', updatePopupPosition);
+        // use capture so scroll events from ancestors are caught
+        window.addEventListener('scroll', updatePopupPosition, true);
+        // listen for other pickers opening so we can close
+        document.addEventListener('colorpicker-open', onExternalOpen as EventListener);
         return () => {
             document.removeEventListener('click', handleClickOutside);
+            window.removeEventListener('resize', updatePopupPosition);
+            window.removeEventListener('scroll', updatePopupPosition, true);
+            document.removeEventListener('colorpicker-open', onExternalOpen as EventListener);
         };
+    });
+
+    onDestroy(() => {
+        // ensure cleanup if needed
+        document.removeEventListener('colorpicker-open', onExternalOpen as EventListener);
     });
 </script>
 
-<div class="color-picker-container">
+<div class="color-picker-container" bind:this={containerEl}>
     <button
         class="color-preview"
         style="background-color: {displayValue};"
-        on:click|stopPropagation={() => (showPopup = !showPopup)}
+        on:click|stopPropagation={() => {
+            showPopup = !showPopup;
+            if (showPopup) {
+                // notify other pickers to close
+                document.dispatchEvent(new CustomEvent('colorpicker-open', { detail: uid }));
+                updatePopupPosition();
+            }
+        }}
         title="选择颜色"
     >
         <span class="color-indicator"></span>
@@ -103,7 +185,11 @@
     {#if showPopup}
         <!-- svelte-ignore a11y-click-events-have-key-events -->
         <!-- svelte-ignore a11y-no-static-element-interactions -->
-        <div class="color-popup" on:click|stopPropagation>
+        <div
+            class="color-popup"
+            on:click|stopPropagation
+            style="top: {popupStyle.top}px; left: {popupStyle.left}px;"
+        >
             {#if myRecentColors.length > 0}
                 <div class="color-section">
                     <div class="section-title">最近使用</div>
@@ -199,17 +285,15 @@
     }
 
     .color-popup {
-        position: absolute;
-        top: 100%;
-        left: 0;
-        z-index: 1000;
+        position: fixed;
+        z-index: 10001;
         background: #fff;
         border: 1px solid #ddd;
         border-radius: 8px;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         padding: 8px;
         min-width: 180px;
-        margin-top: 4px;
+        margin: 0;
     }
 
     .color-section {
