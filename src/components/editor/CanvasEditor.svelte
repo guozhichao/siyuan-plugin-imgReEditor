@@ -4073,17 +4073,67 @@
 
                     // text objects
                     if (['i-text', 'textbox', 'text'].includes(o.type)) {
-                        if (typeof options.family !== 'undefined')
-                            o.set('fontFamily', options.family);
-                        if (typeof options.size !== 'undefined') o.set('fontSize', +options.size);
-                        if (typeof options.fill !== 'undefined') o.set('fill', options.fill);
-                        if (typeof options.stroke !== 'undefined') o.set('stroke', options.stroke);
-                        if (typeof options.strokeWidth !== 'undefined')
-                            o.set('strokeWidth', options.strokeWidth);
-                        if (typeof options.bold !== 'undefined')
-                            o.set('fontWeight', options.bold ? 'bold' : 'normal');
-                        if (typeof options.italic !== 'undefined')
-                            o.set('fontStyle', options.italic ? 'italic' : 'normal');
+                        if ((o as any).isEditing) {
+                            // Apply to selected text range
+                            const styles: any = {};
+                            if (typeof options.family !== 'undefined')
+                                styles.fontFamily = options.family;
+                            if (typeof options.size !== 'undefined')
+                                styles.fontSize = +options.size;
+                            if (typeof options.fill !== 'undefined') styles.fill = options.fill;
+                            if (typeof options.stroke !== 'undefined')
+                                styles.stroke = options.stroke;
+                            if (typeof options.strokeWidth !== 'undefined')
+                                styles.strokeWidth = options.strokeWidth;
+                            if (typeof options.bold !== 'undefined')
+                                styles.fontWeight = options.bold ? 'bold' : 'normal';
+                            if (typeof options.italic !== 'undefined')
+                                styles.fontStyle = options.italic ? 'italic' : 'normal';
+
+                            if (Object.keys(styles).length > 0) {
+                                (o as any).setSelectionStyles(styles);
+                            }
+                        } else {
+                            // Apply to whole object (clear character styles to enforce uniformity)
+                            const cleanStyle = (prop: string) => {
+                                if (!o.styles) return;
+                                for (const row in o.styles) {
+                                    for (const char in o.styles[row]) {
+                                        delete o.styles[row][char][prop];
+                                    }
+                                }
+                            };
+
+                            if (typeof options.family !== 'undefined') {
+                                o.set('fontFamily', options.family);
+                                cleanStyle('fontFamily');
+                            }
+                            if (typeof options.size !== 'undefined') {
+                                o.set('fontSize', +options.size);
+                                cleanStyle('fontSize');
+                            }
+                            if (typeof options.fill !== 'undefined') {
+                                o.set('fill', options.fill);
+                                cleanStyle('fill');
+                            }
+                            if (typeof options.stroke !== 'undefined') {
+                                o.set('stroke', options.stroke);
+                                cleanStyle('stroke');
+                            }
+                            if (typeof options.strokeWidth !== 'undefined') {
+                                o.set('strokeWidth', options.strokeWidth);
+                                cleanStyle('strokeWidth');
+                            }
+                            if (typeof options.bold !== 'undefined') {
+                                o.set('fontWeight', options.bold ? 'bold' : 'normal');
+                                cleanStyle('fontWeight');
+                            }
+                            if (typeof options.italic !== 'undefined') {
+                                o.set('fontStyle', options.italic ? 'italic' : 'normal');
+                                cleanStyle('fontStyle');
+                            }
+                        }
+                        o.dirty = true;
                         o.setCoords && o.setCoords();
                     } else {
                         // shapes and other objects
