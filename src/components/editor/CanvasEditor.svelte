@@ -509,79 +509,72 @@
         } catch (e) {}
     }
 
-    // Handle paste from keyboard shortcut (Ctrl+V)
-    async function handlePaste() {
-        try {
-            if (!canvas) return;
+    const onPaste = (e: ClipboardEvent) => {
+        // If editing text, allow default paste
+        const active = canvas?.getActiveObject();
+        if (
+            active &&
+            ['i-text', 'textbox', 'text'].includes(active.type) &&
+            (active as any).isEditing
+        ) {
+            return;
+        }
 
-            // Check system clipboard to determine what to paste
-            try {
-                const clipboardData = await navigator.clipboard.read();
+        const clipboardData = e.clipboardData;
+        if (!clipboardData) return;
 
-                let hasShapes = false;
-                let hasImage = false;
+        // check for custom shapes
+        const text = clipboardData.getData('text/plain');
+        if (text && text.startsWith('__CANVAS_SHAPES__')) {
+            // rely on internal clipboard state for shapes
+            if (clipboard && clipboard.length > 0) {
+                e.preventDefault();
+                pasteClipboard();
+                return;
+            }
+        }
 
-                // First pass: check what types are available
-                for (const item of clipboardData) {
-                    // Check if clipboard contains text with our special marker
-                    if (item.types.includes('text/plain')) {
-                        try {
-                            const textBlob = await item.getType('text/plain');
-                            const text = await textBlob.text();
-                            if (text.startsWith('__CANVAS_SHAPES__')) {
-                                hasShapes = true;
-                                break;
-                            }
-                        } catch (e) {
-                            // Ignore text read errors
-                        }
-                    }
-
-                    for (const type of item.types) {
-                        if (type.startsWith('image/')) {
-                            hasImage = true;
-                            break;
-                        }
-                    }
-                    if (hasImage) break;
-                }
-
-                // Prioritize shapes if available (user copied shapes in canvas)
-                if (hasShapes) {
-                    pasteClipboard();
-                    return;
-                }
-
-                // Otherwise, paste image if available
-                if (hasImage) {
-                    for (const item of clipboardData) {
-                        for (const type of item.types) {
-                            if (type.startsWith('image/')) {
-                                const blob = await item.getType(type);
-                                const reader = new FileReader();
-                                reader.onload = e => {
-                                    const dataURL = e.target?.result as string;
-                                    if (dataURL) {
-                                        addFabricImageFromURL(dataURL);
-                                    }
-                                };
-                                reader.readAsDataURL(blob);
-                                return;
-                            }
-                        }
-                    }
-                }
-            } catch (err) {
-                // If clipboard API fails, fall back to internal clipboard
-                console.warn('CanvasEditor: clipboard read failed, using internal clipboard', err);
-                if (clipboard && clipboard.length > 0) {
-                    pasteClipboard();
+        // check for files (from explorer)
+        const files = clipboardData.files;
+        if (files && files.length > 0) {
+            let processed = false;
+            for (let i = 0; i < files.length; i++) {
+                if (files[i].type.startsWith('image/')) {
+                    const reader = new FileReader();
+                    reader.onload = e => {
+                        const result = e.target?.result as string;
+                        if (result) addFabricImageFromURL(result);
+                    };
+                    reader.readAsDataURL(files[i]);
+                    processed = true;
                 }
             }
-        } catch (err) {
-            console.warn('CanvasEditor: handlePaste failed', err);
+            if (processed) {
+                e.preventDefault();
+                return;
+            }
         }
-    }
+
+        // check for items (screenshots)
+        const items = clipboardData.items;
+        if (items && items.length > 0) {
+            for (let i = 0; i < items.length; i++) {
+                if (items[i].type.startsWith('image/')) {
+                    const blob = items[i].getAsFile();
+                    if (blob) {
+                        const reader = new FileReader();
+                        reader.onload = e => {
+                            const result = e.target?.result as string;
+                            if (result) addFabricImageFromURL(result);
+                        };
+                        reader.readAsDataURL(blob);
+                        e.preventDefault();
+                        return;
+                    }
+                }
+            }
+        }
+    };
 
     onMount(() => {
         canvas = new Canvas(container, {
@@ -854,10 +847,6 @@
                 e.preventDefault();
                 e.stopPropagation();
                 copySelectedObjects();
-            } else if (key === 'v') {
-                e.preventDefault();
-                e.stopPropagation();
-                handlePaste();
             } else if (key === 'z') {
                 e.preventDefault();
                 e.stopPropagation();
@@ -873,6 +862,7 @@
             }
         };
         document.addEventListener('keydown', onDocKeyShortcuts);
+        window.addEventListener('paste', onPaste);
 
         // mouse handlers for panning and tools
         canvas.on('mouse:down', opt => {
@@ -1885,6 +1875,9 @@
         } catch (e) {}
         try {
             hideContextMenu();
+        } catch (e) {}
+        try {
+            window.removeEventListener('paste', onPaste);
         } catch (e) {}
     });
 
@@ -5181,55 +5174,6 @@
         imgEl.src = url;
     }
 
-    // Global paste handler for images and objects
-    async function onWindowPaste(e: ClipboardEvent) {
-        if (!canvas) return;
-
-        // If the paste target is an input/textarea/contenteditable, allow default handling
-        const el = e.target as HTMLElement | null;
-        if (
-            el &&
-            (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || (el as any).isContentEditable)
-        ) {
-            return;
-        }
-
-        // Stop propagation to prevent Siyuan from receiving the paste event
-        // and prevent default browser handling since we'll handle it for the canvas
-        e.stopPropagation();
-        e.preventDefault();
-
-        const items = e.clipboardData?.items;
-        if (!items) {
-            // If no system clipboard items (or just text/objects), try our internal clipboard
-            pasteClipboard();
-            return;
-        }
-
-        let hasImage = false;
-        for (let i = 0; i < items.length; i++) {
-            if (items[i].type.indexOf('image') !== -1) {
-                const blob = items[i].getAsFile();
-                if (!blob) continue;
-                // Convert blob to base64 data URL for persistent storage
-                const reader = new FileReader();
-                reader.onload = e => {
-                    const dataURL = e.target?.result as string;
-                    if (dataURL) {
-                        addFabricImageFromURL(dataURL);
-                    }
-                };
-                reader.readAsDataURL(blob);
-                hasImage = true;
-            }
-        }
-
-        if (!hasImage) {
-            // If no images found in system clipboard, try internal fabric clipboard
-            pasteClipboard();
-        }
-    }
-
     // API to upload image
     export function uploadImage() {
         const input = document.createElement('input');
@@ -5447,17 +5391,6 @@
             console.warn('ungroupSelection failed', e);
         }
     }
-
-    onMount(() => {
-        window.addEventListener('paste', onWindowPaste);
-    });
-
-    onDestroy(() => {
-        window.removeEventListener('paste', onWindowPaste);
-        if (onDocKeyDown) document.removeEventListener('keydown', onDocKeyDown as any);
-        if (onDocKeyUp) document.removeEventListener('keyup', onDocKeyUp as any);
-        if (onDocKeyShortcuts) document.removeEventListener('keydown', onDocKeyShortcuts);
-    });
 </script>
 
 <div class="canvas-editor">
