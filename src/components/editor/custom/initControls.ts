@@ -184,7 +184,23 @@ function initControls(canvas: Canvas) {
         if (transform.action === 'rotate') return true;
         const activeObjects = canvas.getActiveObjects();
         if (activeObjects.length > 0) {
-            activeObjects.forEach((obj) => canvas.remove(obj));
+            activeObjects.forEach((obj: any) => {
+                // Cascading delete for magnifier components
+                if (obj.type === 'magnifier-rect' && obj.sourceId) {
+                    const objects = canvas.getObjects();
+                    const linkedSource = objects.find((o: any) => o.id === obj.sourceId);
+                    if (linkedSource) canvas.remove(linkedSource);
+                    const lines = objects.filter((o: any) => o.type === 'magnifier-connection-line' && o.viewId === obj.id);
+                    lines.forEach((l: any) => canvas.remove(l));
+                } else if (obj.type === 'magnifier-source-rect' && obj.viewId) {
+                    const objects = canvas.getObjects();
+                    const linkedView = objects.find((o: any) => o.id === obj.viewId);
+                    if (linkedView) canvas.remove(linkedView);
+                    const lines = objects.filter((o: any) => o.type === 'magnifier-connection-line' && o.sourceId === obj.id);
+                    lines.forEach((l: any) => canvas.remove(l));
+                }
+                canvas.remove(obj);
+            });
             canvas.requestRenderAll();
             canvas.discardActiveObject();
         }

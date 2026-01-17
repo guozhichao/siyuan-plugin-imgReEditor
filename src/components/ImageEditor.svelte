@@ -1319,6 +1319,23 @@
                                 if (activeTool === 'mosaic') {
                                     saveToolSettings('mosaic', e.detail.options);
                                 }
+                            } else if (type === 'magnifier-rect') {
+                                if (shouldAutoActivate) {
+                                    // Auto-activate magnifier tool
+                                    activeTool = 'magnifier';
+                                    try {
+                                        if (
+                                            canvasEditorRef &&
+                                            typeof canvasEditorRef.setTool === 'function'
+                                        )
+                                            canvasEditorRef.setTool('magnifier', e.detail.options);
+                                    } catch (err) {}
+                                }
+
+                                // Save settings if magnifier tool is active
+                                if (activeTool === 'magnifier') {
+                                    saveToolSettings('magnifier', e.detail.options);
+                                }
                             } else if (type === 'image') {
                                 if (shouldAutoActivate) {
                                     // Auto-activate image tool

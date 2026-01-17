@@ -21,6 +21,9 @@
     } from 'fabric';
     import { EraserBrush } from '@erase2d/fabric';
     import MosaicRect from './custom/MosaicRect';
+    import MagnifierRect from './custom/MagnifierRect';
+    import MagnifierSourceRect from './custom/MagnifierSourceRect';
+    import MagnifierConnectionLine from './custom/MagnifierConnectionLine';
     import Arrow from './custom/Arrow';
     import NumberMarker from './custom/NumberMarker';
     import CropRect from './custom/CropRect';
@@ -32,6 +35,7 @@
     } from './custom/initControls';
     import initControlsRotate from './custom/initControlsRotate';
     import { pushErrMsg } from '../../api';
+    import { generateId } from '../../utils/uuid';
 
     export let dataURL: string | null = null;
     export let fileName: string | undefined;
@@ -53,6 +57,10 @@
     let tempShape: any = null;
     // number marker state
     let currentNumber = 1;
+    // magnifier state
+    let tempMagnifier: any = null;
+    let magnifierStart = { x: 0, y: 0 };
+    let isDrawingMagnifier = false;
     // crop/resize states
     // context menu state
     let contextMenu: HTMLDivElement | null = null;
@@ -134,6 +142,7 @@
                     obj._isCropRect ||
                     obj._isImageBorder ||
                     obj._isCanvasBackground ||
+                    obj.type === 'magnifier-connection-line' ||
                     (canvas && obj === canvas.backgroundImage)
                 ) {
                     obj.selectable = false;
@@ -364,6 +373,8 @@
                     'arrow',
                     'number-marker',
                     'image',
+                    'mosaic-rect',
+                    'magnifier-rect',
                 ].includes(o.type)
             );
 
@@ -383,6 +394,8 @@
                     'fontSize',
                     '_originalSrc',
                     '_cropOffset',
+                    'blockSize',
+                    'magnification',
                 ])
             );
 
@@ -430,12 +443,40 @@
                     'text',
                     'number-marker',
                     'image',
+                    'mosaic-rect',
+                    'magnifier-rect',
+                    'magnifier-source-rect',
                 ].includes(o.type)
             );
             if (allowed.length === 0) return;
 
             // Remove each object from canvas
             allowed.forEach((o: any) => {
+                // Cascading delete for magnifier components
+                if (o.type === 'magnifier-rect' && o.sourceId) {
+                    const linkedSource = canvas
+                        .getObjects()
+                        .find((obj: any) => obj.id === o.sourceId);
+                    if (linkedSource) canvas.remove(linkedSource);
+                    const lines = canvas
+                        .getObjects()
+                        .filter(
+                            (obj: any) =>
+                                obj.type === 'magnifier-connection-line' && obj.viewId === o.id
+                        );
+                    lines.forEach((l: any) => canvas.remove(l));
+                } else if (o.type === 'magnifier-source-rect' && o.viewId) {
+                    const linkedView = canvas.getObjects().find((obj: any) => obj.id === o.viewId);
+                    if (linkedView) canvas.remove(linkedView);
+                    const lines = canvas
+                        .getObjects()
+                        .filter(
+                            (obj: any) =>
+                                obj.type === 'magnifier-connection-line' && obj.sourceId === o.id
+                        );
+                    lines.forEach((l: any) => canvas.remove(l));
+                }
+
                 try {
                     canvas.remove(o);
                 } catch (e) {}
@@ -613,6 +654,85 @@
 
         dispatch('ready');
 
+        const updateMagnifierConnectionLine = (target: any) => {
+            if (!canvas) return;
+            // find relevant lines
+            const lines = canvas
+                .getObjects()
+                .filter((o: any) => o.type === 'magnifier-connection-line');
+            lines.forEach((line: any) => {
+                let shouldUpdate = false;
+                if (target.type === 'magnifier-rect' && line.viewId === target.id)
+                    shouldUpdate = true;
+                else if (target.type === 'magnifier-source-rect' && line.sourceId === target.id)
+                    shouldUpdate = true;
+
+                if (shouldUpdate) {
+                    const viewObj = canvas.getObjects().find((o: any) => o.id === line.viewId);
+                    const sourceObj = canvas.getObjects().find((o: any) => o.id === line.sourceId);
+                    if (!viewObj || !sourceObj) return;
+
+                    const sCenter = sourceObj.getCenterPoint();
+                    const vCenter = viewObj.getCenterPoint();
+
+                    // Calculate intersection on ViewObj
+                    const angleRad = (viewObj.angle || 0) * (Math.PI / 180);
+                    const vWidth = viewObj.getScaledWidth();
+                    const vHeight = viewObj.getScaledHeight();
+
+                    // Convert source center to local view space
+                    const dx = sCenter.x - vCenter.x;
+                    const dy = sCenter.y - vCenter.y;
+                    const localX = dx * Math.cos(-angleRad) - dy * Math.sin(-angleRad);
+                    const localY = dx * Math.sin(-angleRad) + dy * Math.cos(-angleRad);
+
+                    const absLocalX = Math.abs(localX);
+                    const absLocalY = Math.abs(localY);
+                    const w2 = vWidth / 2;
+                    const h2 = vHeight / 2;
+
+                    let intersectX = 0,
+                        intersectY = 0;
+                    // Prevent updating if source is extremely close to center (avoid jitter)
+                    if (absLocalX > 1 || absLocalY > 1) {
+                        // Project to border
+                        // We want P on boundary such that P is on segment V->S (or S->V).
+                        // Ray from V to S passes through P.
+                        // P = V + t * (S - V).
+                        // In local coords: P_local = t * (localX, localY).
+                        // We need P_local to be on boundary.
+                        // |x| = w2 or |y| = h2.
+                        // t * |localX| = w2 => t = w2 / |localX|
+                        // t * |localY| = h2 => t = h2 / |localY|
+                        // We take smallest t to hit the first boundary.
+                        const scaleX = w2 / (absLocalX || 0.0001);
+                        const scaleY = h2 / (absLocalY || 0.0001);
+                        const scale = Math.min(scaleX, scaleY);
+
+                        // If scale > 1, S is strictly inside.
+                        // If we want line to end at edge regardless, we use limit of 1?
+                        // "End point is edge". If S is inside, line should go from S to edge (away)?
+                        // Current logic: P is on boundary.
+                        // If S inside, P is further away. Line S->P. This is valid.
+                        // If S outside, P is closer. Line S->P. This is valid.
+
+                        intersectX = localX * scale;
+                        intersectY = localY * scale;
+                    }
+
+                    const finalX =
+                        vCenter.x +
+                        (intersectX * Math.cos(angleRad) - intersectY * Math.sin(angleRad));
+                    const finalY =
+                        vCenter.y +
+                        (intersectX * Math.sin(angleRad) + intersectY * Math.cos(angleRad));
+
+                    line.set({ x1: sCenter.x, y1: sCenter.y, x2: finalX, y2: finalY });
+                    line.setCoords();
+                }
+            });
+        };
+
         // Handle right click for context menu
         canvas.on('mouse:down', (opt: any) => {
             const e = opt.e as MouseEvent;
@@ -779,7 +899,8 @@
                     activeTool === 'shape' ||
                     activeTool === 'arrow' ||
                     activeTool === 'number-marker' ||
-                    activeTool === 'mosaic'
+                    activeTool === 'mosaic' ||
+                    activeTool === 'magnifier'
                 ) {
                     canvas.defaultCursor = 'crosshair';
                 } else if (activeTool === 'text') {
@@ -1149,6 +1270,53 @@
                 canvas.add(tempMosaic);
                 canvas.requestRenderAll();
                 return;
+                return;
+            }
+
+            // Magnifier tool: start drawing magnifier rectangle
+            if (activeTool === 'magnifier') {
+                if (opt.e.ctrlKey || opt.e.metaKey) return;
+                // Only allow selecting magnifier rectangles, not other shapes
+                let hit = opt.target;
+                try {
+                    if (!hit && canvas && typeof (canvas as any).findTarget === 'function') {
+                        hit = (canvas as any).findTarget(opt.e);
+                    }
+                } catch (e) {}
+                // Only allow selection if the hit object is a magnifier-rect or magnifier-source-rect
+                if (
+                    hit &&
+                    (hit.type === 'magnifier-rect' || hit.type === 'magnifier-source-rect')
+                ) {
+                    // Let Fabric handle selection and dragging
+                    return;
+                }
+                // If hit a non-magnifier object, clear selection to prevent moving it
+                if (hit) {
+                    try {
+                        canvas.discardActiveObject();
+                        canvas.requestRenderAll();
+                    } catch (e) {}
+                }
+
+                // Start drawing magnifier rectangle
+                magnifierStart = { x: pointer.x, y: pointer.y };
+                isDrawingMagnifier = true;
+                tempMagnifier = new MagnifierSourceRect({
+                    left: pointer.x,
+                    top: pointer.y,
+                    width: 0,
+                    height: 0,
+                    stroke: activeToolOptions.sourceStroke || '#00ccff',
+                    strokeWidth: activeToolOptions.sourceStrokeWidth || 1,
+                    magnifierShape: activeToolOptions.magnifierShape || 'rect',
+                    selectable: false,
+                    evented: false,
+                    erasable: true,
+                });
+                canvas.add(tempMagnifier);
+                canvas.requestRenderAll();
+                return;
             }
 
             // Text tool: create or select an editable text object
@@ -1405,6 +1573,7 @@
                 // Prevent tool switching when in the middle of a drawing operation
                 if (tempArrow && active !== tempArrow) return;
                 if (isDrawingMosaic && active !== tempMosaic) return;
+                if (isDrawingMagnifier && active !== tempMagnifier) return;
                 if (isDrawingShape && active !== tempShape) return;
 
                 // Ignore canvas boundary rectangle
@@ -1580,6 +1749,91 @@
                         },
                         type: 'mosaic-rect',
                     });
+                } else if (targetType === 'magnifier-rect') {
+                    // Fetch source properties
+                    let sourceStroke = '#00ccff';
+                    let sourceStrokeWidth = 1;
+                    if ((representativeObject as any).sourceId && canvas) {
+                        const sourceObj = canvas
+                            .getObjects()
+                            .find((o: any) => o.id === (representativeObject as any).sourceId);
+                        if (sourceObj) {
+                            sourceStroke = (sourceObj.stroke as string) || '#00ccff';
+                            sourceStrokeWidth = sourceObj.strokeWidth || 1;
+                        }
+                    }
+
+                    // Fetch connection properties
+                    let connectionStroke = '#00ccff';
+                    let connectionStrokeWidth = 1;
+                    if (canvas) {
+                        const line = canvas
+                            .getObjects()
+                            .find(
+                                (o: any) =>
+                                    o.type === 'magnifier-connection-line' &&
+                                    o.viewId === representativeObject.id
+                            );
+                        if (line) {
+                            connectionStroke = (line.stroke as string) || '#00ccff';
+                            connectionStrokeWidth = line.strokeWidth || 1;
+                        }
+                    }
+
+                    dispatch('selection', {
+                        options: {
+                            magnification: (representativeObject as any).magnification || 2,
+                            stroke: representativeObject.stroke,
+                            strokeWidth: representativeObject.strokeWidth,
+                            sourceStroke,
+                            sourceStrokeWidth,
+                            connectionStroke,
+                            connectionStrokeWidth,
+                            isSelection: true,
+                            selectionType: 'magnifier',
+                            magnifierShape: (representativeObject as any).magnifierShape || 'rect',
+                        },
+                        type: 'magnifier-rect',
+                    });
+                } else if (targetType === 'magnifier-source-rect') {
+                    // When source rect is selected, show settings from the linked view rect PLUS its own
+                    let options: any = {
+                        isSelection: true,
+                        selectionType: 'magnifier',
+                        sourceStroke: representativeObject.stroke,
+                        sourceStrokeWidth: representativeObject.strokeWidth,
+                        magnifierShape: (representativeObject as any).magnifierShape || 'rect',
+                    };
+
+                    // Fetch connection properties
+                    if (canvas) {
+                        const line = canvas
+                            .getObjects()
+                            .find(
+                                (o: any) =>
+                                    o.type === 'magnifier-connection-line' &&
+                                    o.sourceId === representativeObject.id
+                            );
+                        if (line) {
+                            options.connectionStroke = (line.stroke as string) || '#00ccff';
+                            options.connectionStrokeWidth = line.strokeWidth || 1;
+                        }
+                    }
+
+                    if ((representativeObject as any).viewId && canvas) {
+                        const viewObj = canvas
+                            .getObjects()
+                            .find((o: any) => o.id === (representativeObject as any).viewId);
+                        if (viewObj) {
+                            options.magnification = (viewObj as any).magnification || 2;
+                            options.stroke = viewObj.stroke;
+                            options.strokeWidth = viewObj.strokeWidth;
+                        }
+                    }
+                    dispatch('selection', {
+                        options: options,
+                        type: 'magnifier-rect', // Treat as magnifier-rect for settings UI
+                    });
                 } else if (targetType === 'image') {
                     dispatch('selection', {
                         options: {
@@ -1660,7 +1914,133 @@
             } catch (e) {
                 // ignore
             }
+
+            // Sync magnifier source/view scaling
+            const obj = opt.target;
+            if (obj && obj.type === 'magnifier-rect' && obj.sourceId) {
+                // View scaled -> Update dimensions to maintain source aspect ratio
+                const sourceObj = canvas.getObjects().find((o: any) => o.id === obj.sourceId);
+                if (sourceObj) {
+                    const sourceW = sourceObj.getScaledWidth();
+                    const sourceH = sourceObj.getScaledHeight();
+
+                    if (sourceW > 1 && sourceH > 1) {
+                        // Get current scaled dimensions
+                        const viewW = obj.getScaledWidth();
+                        const viewH = obj.getScaledHeight();
+
+                        // Calculate new magnification based on average of width and height ratios
+                        // This handles both rect and circle shapes correctly
+                        const magW = viewW / sourceW;
+                        const magH = viewH / sourceH;
+                        const newMag = (magW + magH) / 2;
+                        const finalMag = parseFloat(newMag.toFixed(2));
+
+                        // Calculate new dimensions maintaining source aspect ratio
+                        const newViewW = sourceW * finalMag;
+                        const newViewH = sourceH * finalMag;
+
+                        const center = obj.getCenterPoint();
+
+                        // Update view rect with new dimensions and reset scale
+                        obj.set({
+                            width: newViewW,
+                            height: newViewH,
+                            scaleX: 1,
+                            scaleY: 1,
+                            magnification: finalMag,
+                        });
+
+                        obj.setPositionByOrigin(center, 'center', 'center');
+                        obj.setCoords();
+                        obj.dirty = true;
+
+                        // Update settings UI dynamically
+                        dispatch('selection', {
+                            options: {
+                                ...activeToolOptions,
+                                magnification: finalMag,
+                                stroke: obj.stroke,
+                                strokeWidth: obj.strokeWidth,
+                            },
+                            type: 'magnifier-rect',
+                        });
+
+                        canvas.requestRenderAll();
+                    }
+                }
+            } else if (obj && obj.type === 'magnifier-source-rect' && obj.viewId) {
+                // Source Resized -> Update View dimensions to match Source AR * Magnification
+                const viewObj = canvas.getObjects().find((o: any) => o.id === obj.viewId);
+                if (viewObj) {
+                    const mag = viewObj.magnification || 2;
+                    // Get new source dimensions
+                    const sourceW = obj.getScaledWidth();
+                    const sourceH = obj.getScaledHeight();
+
+                    const newViewW = sourceW * mag;
+                    const newViewH = sourceH * mag;
+
+                    const center = viewObj.getCenterPoint();
+
+                    // Update View Rect
+                    viewObj.set({
+                        width: newViewW,
+                        height: newViewH,
+                        scaleX: 1,
+                        scaleY: 1,
+                    });
+
+                    viewObj.setPositionByOrigin(center, 'center', 'center');
+                    viewObj.setCoords();
+                    viewObj.dirty = true;
+                    // Force render to ensure view rect updates in real-time
+                    canvas.requestRenderAll();
+                }
+            }
+
+            // Sync connection line on scaling
+            if (obj && (obj.type === 'magnifier-rect' || obj.type === 'magnifier-source-rect')) {
+                updateMagnifierConnectionLine(obj);
+            }
         });
+
+        // Add object:moving listener for Magnifier Source updates
+        // Add object:moving listener for Magnifier updates
+        canvas.on('object:moving', (opt: any) => {
+            const target = opt.target;
+            if (
+                target &&
+                (target.type === 'magnifier-source-rect' || target.type === 'magnifier-rect')
+            ) {
+                // Sync connection line on moving
+                updateMagnifierConnectionLine(target);
+                canvas.requestRenderAll();
+            }
+        });
+
+        // Sync rotation
+        canvas.on('object:rotating', (opt: any) => {
+            const target = opt.target;
+            if (target && target.type === 'magnifier-source-rect' && target.viewId) {
+                const viewObj = canvas.getObjects().find((o: any) => o.id === target.viewId);
+                if (viewObj) {
+                    viewObj.set('angle', target.angle);
+                    viewObj.setCoords();
+                    updateMagnifierConnectionLine(target);
+                    canvas.requestRenderAll();
+                }
+            } else if (target && target.type === 'magnifier-rect' && target.sourceId) {
+                const sourceObj = canvas.getObjects().find((o: any) => o.id === target.sourceId);
+                if (sourceObj) {
+                    sourceObj.set('angle', target.angle);
+                    sourceObj.setCoords();
+                    updateMagnifierConnectionLine(target);
+                    canvas.requestRenderAll();
+                }
+            }
+        });
+
         canvas.on('mouse:move', opt => {
             const pointer = canvas.getPointer(opt.e);
 
@@ -1715,6 +2095,21 @@
                 const height = Math.abs(pointer.y - sy);
                 tempMosaic.set({ left, top, width, height });
                 tempMosaic.setCoords();
+                canvas.requestRenderAll();
+                return;
+            }
+
+            // if magnifier drawing in progress
+            if (isDrawingMagnifier && tempMagnifier) {
+                const sx = magnifierStart.x;
+                const sy = magnifierStart.y;
+                const left = Math.min(sx, pointer.x);
+                const top = Math.min(sy, pointer.y);
+                const width = Math.abs(pointer.x - sx);
+                const height = Math.abs(pointer.y - sy);
+                tempMagnifier.set({ left, top, width, height });
+                // We don't cache MagnifierRect, it re-renders on move/resize, setCoords updates bounding box
+                tempMagnifier.setCoords();
                 canvas.requestRenderAll();
                 return;
             }
@@ -1797,6 +2192,94 @@
                 tempMosaic = null;
                 isDrawingMosaic = false;
                 return;
+                return;
+            }
+
+            // finish magnifier drawing
+            if (isDrawingMagnifier && tempMagnifier) {
+                try {
+                    const minSize = 10;
+                    if (tempMagnifier.width < minSize || tempMagnifier.height < minSize) {
+                        try {
+                            canvas.remove(tempMagnifier);
+                        } catch (e) {}
+                        tempMagnifier = null;
+                        isDrawingMagnifier = false;
+                        return;
+                    }
+
+                    // finalize
+                    const sourceId = generateId();
+                    const viewId = generateId();
+                    const mag = activeToolOptions.magnification || 2;
+                    const shape = activeToolOptions.magnifierShape || 'rect';
+
+                    // Finalize Source Rect (tempMagnifier is now source)
+                    tempMagnifier.set({
+                        id: sourceId,
+                        viewId: viewId,
+                        magnifierShape: shape,
+                        selectable: true,
+                        evented: true,
+                    });
+                    tempMagnifier.setCoords();
+
+                    // Create View Rect
+                    // Place it to the right of source
+                    const viewLeft = tempMagnifier.left + tempMagnifier.width + 20;
+                    const viewTop = tempMagnifier.top;
+
+                    const viewRect = new MagnifierRect({
+                        id: viewId,
+                        sourceId: sourceId,
+                        left: viewLeft,
+                        top: viewTop,
+                        width: tempMagnifier.width * mag,
+                        height: tempMagnifier.height * mag,
+                        magnification: mag,
+                        magnifierShape: shape,
+                        stroke: activeToolOptions.stroke || '#000000',
+                        strokeWidth: activeToolOptions.strokeWidth || 2,
+                        selectable: true,
+                        evented: true,
+                    });
+
+                    canvas.add(viewRect);
+
+                    // Add connection line
+                    const sCenter = tempMagnifier.getCenterPoint();
+                    const vCenter = viewRect.getCenterPoint();
+
+                    const line = new MagnifierConnectionLine(
+                        [sCenter.x, sCenter.y, vCenter.x, vCenter.y],
+                        {
+                            sourceId: sourceId,
+                            viewId: viewId,
+                            stroke: activeToolOptions.connectionStroke || '#00ccff',
+                            strokeWidth: activeToolOptions.connectionStrokeWidth || 1,
+                        }
+                    );
+
+                    canvas.add(line);
+                    try {
+                        (canvas as any).sendToBack(line);
+                    } catch (e) {}
+
+                    // Update layout
+                    updateMagnifierConnectionLine(viewRect);
+
+                    canvas.setActiveObject(viewRect);
+                    canvas.requestRenderAll();
+                    schedulePushWithType('added');
+
+                    tempMagnifier = null;
+                    isDrawingMagnifier = false;
+                    return;
+                } catch (e) {
+                    console.warn('Error inside magnifier mouse:up', e);
+                }
+                tempMagnifier = null;
+                isDrawingMagnifier = false;
             }
 
             // finish shape drawing
@@ -1952,6 +2435,7 @@
             else if (tool === 'brush') canvas.defaultCursor = 'crosshair';
             else if (tool === 'eraser') canvas.defaultCursor = 'crosshair';
             else if (tool === 'mosaic') canvas.defaultCursor = 'crosshair';
+            else if (tool === 'magnifier') canvas.defaultCursor = 'crosshair';
             else if (tool === 'text') canvas.defaultCursor = 'text';
             else if (tool === 'number-marker') canvas.defaultCursor = 'crosshair';
             else if (tool === 'hand') canvas.defaultCursor = 'grab';
@@ -1966,11 +2450,12 @@
                 shape: ['rect', 'circle', 'ellipse', 'triangle'],
                 arrow: ['arrow'],
                 mosaic: ['mosaic-rect'],
+                magnifier: ['magnifier-rect', 'magnifier-source-rect'],
                 'number-marker': ['number-marker'],
                 text: ['i-text', 'textbox', 'text'],
             };
 
-            const drawingTools = ['shape', 'arrow', 'mosaic', 'number-marker', 'text'];
+            const drawingTools = ['shape', 'arrow', 'mosaic', 'magnifier', 'number-marker', 'text'];
             const isDrawingTool = drawingTools.includes(tool || '');
 
             canvas.getObjects().forEach((obj: any) => {
@@ -3963,6 +4448,177 @@
                         if (typeof options.blockSize !== 'undefined') {
                             o.set('blockSize', options.blockSize);
                             o.dirty = true;
+                        }
+                    } else if (o.type === 'magnifier-rect') {
+                        if (typeof options.magnification !== 'undefined') {
+                            o.set('magnification', options.magnification);
+                            o.dirty = true;
+
+                            // Sync View rect size based on constant Source
+                            if (o.sourceId && canvas) {
+                                const sourceObj = canvas
+                                    .getObjects()
+                                    .find((obj: any) => obj.id === o.sourceId);
+                                if (sourceObj) {
+                                    try {
+                                        const mag = Math.max(1, options.magnification);
+                                        const sourceW = sourceObj.getScaledWidth();
+                                        const sourceH = sourceObj.getScaledHeight();
+
+                                        // Update View dimensions
+                                        const center = o.getCenterPoint();
+                                        o.set({
+                                            width: sourceW * mag,
+                                            height: sourceH * mag,
+                                            scaleX: 1,
+                                            scaleY: 1,
+                                        });
+                                        o.setPositionByOrigin(center, 'center', 'center');
+                                        o.setCoords();
+                                    } catch (e) {
+                                        console.warn('Failed to sync view rect', e);
+                                    }
+                                }
+                            }
+                        }
+
+                        if (typeof options.magnifierShape !== 'undefined') {
+                            o.set('magnifierShape', options.magnifierShape);
+                            o.dirty = true;
+                            // Sync to source
+                            if (o.sourceId && canvas) {
+                                const sourceObj = canvas
+                                    .getObjects()
+                                    .find((obj: any) => obj.id === o.sourceId);
+                                if (sourceObj) {
+                                    sourceObj.set('magnifierShape', options.magnifierShape);
+                                    sourceObj.dirty = true;
+                                }
+                            }
+                        }
+
+                        if (
+                            typeof options.sourceStroke !== 'undefined' ||
+                            typeof options.sourceStrokeWidth !== 'undefined'
+                        ) {
+                            if (o.sourceId && canvas) {
+                                const sourceObj = canvas
+                                    .getObjects()
+                                    .find((obj: any) => obj.id === o.sourceId);
+                                if (sourceObj) {
+                                    if (typeof options.sourceStroke !== 'undefined') {
+                                        sourceObj.set('stroke', options.sourceStroke);
+                                    }
+                                    if (typeof options.sourceStrokeWidth !== 'undefined') {
+                                        sourceObj.set('strokeWidth', options.sourceStrokeWidth);
+                                    }
+                                    sourceObj.dirty = true;
+                                    canvas.requestRenderAll();
+                                }
+                            }
+                        }
+
+                        if (
+                            typeof options.connectionStroke !== 'undefined' ||
+                            typeof options.connectionStrokeWidth !== 'undefined'
+                        ) {
+                            if (canvas) {
+                                const line = canvas
+                                    .getObjects()
+                                    .find(
+                                        (obj: any) =>
+                                            obj.type === 'magnifier-connection-line' &&
+                                            obj.viewId === o.id
+                                    );
+                                if (line) {
+                                    if (typeof options.connectionStroke !== 'undefined') {
+                                        line.set('stroke', options.connectionStroke);
+                                    }
+                                    if (typeof options.connectionStrokeWidth !== 'undefined') {
+                                        line.set('strokeWidth', options.connectionStrokeWidth);
+                                    }
+                                    line.dirty = true;
+                                    canvas.requestRenderAll();
+                                }
+                            }
+                        }
+                    } else if (o.type === 'magnifier-source-rect') {
+                        // Apply settings to self (source rect) or linked view
+                        if (typeof options.sourceStroke !== 'undefined') {
+                            o.set('stroke', options.sourceStroke);
+                        }
+                        if (typeof options.sourceStrokeWidth !== 'undefined') {
+                            o.set('strokeWidth', options.sourceStrokeWidth);
+                        }
+                        o.dirty = true;
+
+                        if (typeof options.magnifierShape !== 'undefined') {
+                            o.set('magnifierShape', options.magnifierShape);
+                            o.dirty = true;
+                            // Sync to view
+                            if (o.viewId && canvas) {
+                                const viewObj = canvas
+                                    .getObjects()
+                                    .find((obj: any) => obj.id === o.viewId);
+                                if (viewObj) {
+                                    viewObj.set('magnifierShape', options.magnifierShape);
+                                    viewObj.dirty = true;
+                                }
+                            }
+                        }
+
+                        // Apply magnification/stroke to linked view
+                        if (canvas && o.viewId) {
+                            const viewObj = canvas
+                                .getObjects()
+                                .find((obj: any) => obj.id === o.viewId);
+                            if (viewObj) {
+                                if (typeof options.magnification !== 'undefined') {
+                                    viewObj.set('magnification', options.magnification);
+                                    // Sync source size backwards
+                                    const mag = Math.max(1, options.magnification);
+                                    const w = (viewObj.width * (viewObj.scaleX || 1)) / mag;
+                                    const h = (viewObj.height * (viewObj.scaleY || 1)) / mag;
+                                    const center = o.getCenterPoint();
+                                    o.set({
+                                        width: w,
+                                        height: h,
+                                        scaleX: 1,
+                                        scaleY: 1,
+                                    });
+                                    o.setPositionByOrigin(center, 'center', 'center');
+                                    o.setCoords();
+                                }
+                                if (typeof options.strokeWidth !== 'undefined') {
+                                    viewObj.set('strokeWidth', options.strokeWidth);
+                                }
+                                viewObj.dirty = true;
+                            }
+                        }
+
+                        if (
+                            typeof options.connectionStroke !== 'undefined' ||
+                            typeof options.connectionStrokeWidth !== 'undefined'
+                        ) {
+                            if (canvas) {
+                                const line = canvas
+                                    .getObjects()
+                                    .find(
+                                        (obj: any) =>
+                                            obj.type === 'magnifier-connection-line' &&
+                                            obj.sourceId === o.id
+                                    );
+                                if (line) {
+                                    if (typeof options.connectionStroke !== 'undefined') {
+                                        line.set('stroke', options.connectionStroke);
+                                    }
+                                    if (typeof options.connectionStrokeWidth !== 'undefined') {
+                                        line.set('strokeWidth', options.connectionStrokeWidth);
+                                    }
+                                    line.dirty = true;
+                                    canvas.requestRenderAll();
+                                }
+                            }
                         }
                     }
 

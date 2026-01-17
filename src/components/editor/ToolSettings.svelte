@@ -802,6 +802,111 @@
             />
             <span class="val">{settings.blockSize || 15}</span>
         </div>
+    {:else if tool === 'magnifier'}
+        <div class="row">
+            <label>形状</label>
+            <div class="radio-group">
+                <label>
+                    <input
+                        type="radio"
+                        name="magnifierShape"
+                        value="rect"
+                        checked={!settings.magnifierShape || settings.magnifierShape === 'rect'}
+                        on:change={() => emitChange({ magnifierShape: 'rect' })}
+                    />
+                    矩形
+                </label>
+                <label>
+                    <input
+                        type="radio"
+                        name="magnifierShape"
+                        value="circle"
+                        checked={settings.magnifierShape === 'circle'}
+                        on:change={() => emitChange({ magnifierShape: 'circle' })}
+                    />
+                    圆形
+                </label>
+            </div>
+        </div>
+        <div class="row">
+            <label for="magnifier-zoom">放大倍数</label>
+            <input
+                id="magnifier-zoom"
+                type="range"
+                min="1.5"
+                max="10"
+                step="0.1"
+                value={settings.magnification || 2}
+                on:input={e => emitChange({ magnification: +getValue(e) })}
+            />
+            <span class="val">{parseFloat((settings.magnification || 2).toFixed(1))}x</span>
+        </div>
+        <div class="row">
+            <label for="magnifier-border-color">边框颜色</label>
+            <ColorPicker
+                colorKey="magnifier-border-color"
+                value={settings.stroke || '#000000'}
+                {recentColors}
+                on:change={e => emitChange({ stroke: e.detail })}
+                on:recentUpdate
+            />
+        </div>
+        <div class="row">
+            <label for="magnifier-border-width">边框粗细</label>
+            <input
+                id="magnifier-border-width"
+                type="range"
+                min="0"
+                max="10"
+                value={settings.strokeWidth || 2}
+                on:input={e => emitChange({ strokeWidth: +getValue(e) })}
+            />
+            <span class="val">{settings.strokeWidth || 2}</span>
+        </div>
+        <div class="row">
+            <label for="magnifier-source-border-color">框选颜色</label>
+            <ColorPicker
+                colorKey="magnifier-source-border-color"
+                value={settings.sourceStroke || '#00ccff'}
+                {recentColors}
+                on:change={e => emitChange({ sourceStroke: e.detail })}
+                on:recentUpdate
+            />
+        </div>
+        <div class="row">
+            <label for="magnifier-source-border-width">框选粗细</label>
+            <input
+                id="magnifier-source-border-width"
+                type="range"
+                min="0"
+                max="10"
+                value={settings.sourceStrokeWidth || 1}
+                on:input={e => emitChange({ sourceStrokeWidth: +getValue(e) })}
+            />
+            <span class="val">{settings.sourceStrokeWidth || 1}</span>
+        </div>
+        <div class="row">
+            <label for="magnifier-conn-color">连线颜色</label>
+            <ColorPicker
+                colorKey="magnifier-conn-color"
+                value={settings.connectionStroke || '#00ccff'}
+                {recentColors}
+                on:change={e => emitChange({ connectionStroke: e.detail })}
+                on:recentUpdate
+            />
+        </div>
+        <div class="row">
+            <label for="magnifier-conn-width">连线粗细</label>
+            <input
+                id="magnifier-conn-width"
+                type="range"
+                min="0"
+                max="10"
+                value={settings.connectionStrokeWidth || 1}
+                on:input={e => emitChange({ connectionStrokeWidth: +getValue(e) })}
+            />
+            <span class="val">{settings.connectionStrokeWidth || 1}</span>
+        </div>
     {:else if tool === 'image'}
         {#if settings.isSelection}
             <div class="row">
