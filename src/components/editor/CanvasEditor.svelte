@@ -1038,6 +1038,7 @@
                     strokeWidth: activeToolOptions.strokeWidth || 4,
                     arrowHead: activeToolOptions.arrowHead || 'right',
                     headStyle: activeToolOptions.headStyle || 'sharp',
+                    anchorStyle: activeToolOptions.anchorStyle || 'curved',
                     lineStyle: activeToolOptions.lineStyle || 'solid',
                     thicknessStyle: activeToolOptions.thicknessStyle || 'uniform',
                     useCustomSelection: true,
@@ -1469,6 +1470,7 @@
                             ),
                             arrowHead: (active as any).arrowHead,
                             headStyle: (active as any).headStyle,
+                            anchorStyle: (active as any).anchorStyle,
                             lineStyle: (active as any).lineStyle,
                             thicknessStyle: (active as any).thicknessStyle,
                         },
@@ -4091,6 +4093,34 @@
                             'thicknessStyle' in o
                         ) {
                             o.set('thicknessStyle', options.thicknessStyle);
+                            o.dirty = true;
+                        }
+                        if (typeof options.anchorStyle !== 'undefined' && 'anchorStyle' in o) {
+                            const oldAnchorStyle = o.anchorStyle;
+                            const newAnchorStyle = options.anchorStyle;
+
+                            // Convert controlOffset when switching between modes to maintain visual position
+                            if (
+                                oldAnchorStyle !== newAnchorStyle &&
+                                'controlOffsetX' in o &&
+                                'controlOffsetY' in o
+                            ) {
+                                if (oldAnchorStyle === 'curved' && newAnchorStyle === 'straight') {
+                                    // Curved to straight: the visual position is controlOffset * 2*t*(1-t) = controlOffset * 0.5
+                                    // So to maintain position, divide by 2
+                                    o.set('controlOffsetX', o.controlOffsetX / 2);
+                                    o.set('controlOffsetY', o.controlOffsetY / 2);
+                                } else if (
+                                    oldAnchorStyle === 'straight' &&
+                                    newAnchorStyle === 'curved'
+                                ) {
+                                    // Straight to curved: multiply by 2 to maintain visual position
+                                    o.set('controlOffsetX', o.controlOffsetX * 2);
+                                    o.set('controlOffsetY', o.controlOffsetY * 2);
+                                }
+                            }
+
+                            o.set('anchorStyle', options.anchorStyle);
                             o.dirty = true;
                         }
                         // Handle custom NumberMarker class

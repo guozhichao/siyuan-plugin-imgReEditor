@@ -157,11 +157,21 @@ function deletePositionHandler(_dim: any, finalMatrix: any, fabricObject: any) {
 function centerControlPositionHandler(_dim: any, finalMatrix: any, fabricObject: any) {
     const arrow = fabricObject as any;
     const canvas = arrow.canvas;
-    // 计算曲线控制点在 t=0.5 处的位置（在对象局部坐标系中）
-    const t = 0.5;
-    // 对于二次贝塞尔曲线，中点的控制点影响为：2*t*(1-t)*controlOffset
-    const localX = arrow.controlOffsetX * 2 * t * (1 - t);
-    const localY = arrow.controlOffsetY * 2 * t * (1 - t);
+
+    let localX: number, localY: number;
+
+    // For straight anchor style, show control point at actual position
+    if (arrow.anchorStyle === 'straight') {
+        localX = arrow.controlOffsetX;
+        localY = arrow.controlOffsetY;
+    } else {
+        // For curved anchor style, calculate position on bezier curve at t=0.5
+        const t = 0.5;
+        // 对于二次贝塞尔曲线，中点的控制点影响为：2*t*(1-t)*controlOffset
+        localX = arrow.controlOffsetX * 2 * t * (1 - t);
+        localY = arrow.controlOffsetY * 2 * t * (1 - t);
+    }
+
     const localPoint = new Point(localX, localY);
     // 转换到画布坐标
     const canvasPoint = util.transformPoint(localPoint, arrow.calcTransformMatrix());
@@ -189,9 +199,51 @@ const centerControlActionHandler = (
     const matrix = arrow.calcTransformMatrix();
     const invertedMatrix = util.invertTransform(matrix);
     const newLocal = util.transformPoint(currentMouseCanvas, invertedMatrix);
+
+    let finalX = newLocal.x;
+    let finalY = newLocal.y;
+
+    // For straight mode with Shift key, snap to 90-degree angles
+    if (arrow.anchorStyle === 'straight' && eventData.shiftKey) {
+        // Calculate center point (origin in local coordinates is at center)
+        const centerX = (arrow.x1 + arrow.x2) / 2;
+        const centerY = (arrow.y1 + arrow.y2) / 2;
+
+        // Get start and end points relative to center
+        const startX = arrow.x1 - centerX;
+        const startY = arrow.y1 - centerY;
+        const endX = arrow.x2 - centerX;
+        const endY = arrow.y2 - centerY;
+
+        // Determine if we should snap horizontally-then-vertically or vertically-then-horizontally
+        // based on which direction the mouse is closer to
+        const distToHorizontalFirst = Math.abs(newLocal.y - startY);
+        const distToVerticalFirst = Math.abs(newLocal.x - startX);
+
+        if (distToHorizontalFirst < distToVerticalFirst) {
+            // Snap to horizontal-then-vertical (L-shape with horizontal first)
+            // Control point is at (endX, startY)
+            finalX = endX;
+            finalY = startY;
+        } else {
+            // Snap to vertical-then-horizontal (L-shape with vertical first)
+            // Control point is at (startX, endY)
+            finalX = startX;
+            finalY = endY;
+        }
+    }
+
     // Update control offsets
-    arrow.controlOffsetX = newLocal.x * 2;
-    arrow.controlOffsetY = newLocal.y * 2;
+    // For straight mode, use direct position; for curved mode, multiply by 2 for bezier formula
+    if (arrow.anchorStyle === 'straight') {
+        arrow.controlOffsetX = finalX;
+        arrow.controlOffsetY = finalY;
+    } else {
+        // For bezier curves, the control point influence is 2*t*(1-t), so we multiply by 2
+        arrow.controlOffsetX = finalX * 2;
+        arrow.controlOffsetY = finalY * 2;
+    }
+
     arrow.setCoords();
     arrow.set('dirty', true);
     return true;
@@ -200,11 +252,13 @@ export type ArrowHeadType = 'none' | 'left' | 'right' | 'both';
 export type ArrowHeadStyle = 'sharp' | 'swallowtail' | 'sharp-hollow' | 'swallowtail-hollow';
 export type ArrowLineStyle = 'solid' | 'dashed' | 'dotted' | 'dash-dot';
 export type ArrowThicknessStyle = 'uniform' | 'varying';
+export type ArrowAnchorStyle = 'straight' | 'curved';
 interface ArrowOptions extends TOptions<FabricObjectProps> {
     arrowHead?: ArrowHeadType;
     headStyle?: ArrowHeadStyle;
     lineStyle?: ArrowLineStyle;
     thicknessStyle?: ArrowThicknessStyle;
+    anchorStyle?: ArrowAnchorStyle;
     useCustomSelection?: boolean;
     controlOffsetX?: number;
     controlOffsetY?: number;
@@ -219,6 +273,7 @@ export class Arrow extends Line {
     headStyle: ArrowHeadStyle;
     lineStyle: ArrowLineStyle;
     thicknessStyle: ArrowThicknessStyle;
+    anchorStyle: ArrowAnchorStyle;
     useCustomSelection: boolean;
     controlOffsetX: number;
     controlOffsetY: number;
@@ -228,6 +283,7 @@ export class Arrow extends Line {
         this.headStyle = options?.headStyle || 'sharp';
         this.lineStyle = options?.lineStyle || 'solid';
         this.thicknessStyle = options?.thicknessStyle || 'uniform';
+        this.anchorStyle = options?.anchorStyle || 'curved';
         this.useCustomSelection = true;
         this.strokeLineCap = 'butt'; // Flat ends as requested
         this.strokeLineJoin = 'round';
@@ -414,7 +470,8 @@ export class Arrow extends Line {
         const visualLength = Math.sqrt(xDiff * xDiff + yDiff * yDiff);
         // Check if the arrow is curved BEFORE rotation transformation
         // This ensures vertical arrows are properly detected as curved
-        const isCurved = Math.abs(this.controlOffsetX) > 0.1 || Math.abs(this.controlOffsetY) > 0.1;
+        // When anchorStyle is 'straight', force the arrow to be straight regardless of controlOffset
+        const isCurved = this.anchorStyle === 'curved' && (Math.abs(this.controlOffsetX) > 0.1 || Math.abs(this.controlOffsetY) > 0.1);
 
         // Calculate control point in the rotated coordinate system
         // controlOffsetX/Y are already relative to center (0,0)
@@ -641,8 +698,12 @@ export class Arrow extends Line {
             if (isCurved) {
                 // Draw quadratic bezier curve
                 ctx.quadraticCurveTo(rotatedControlX, rotatedControlY, visualLength / 2, 0);
+            } else if (this.anchorStyle === 'straight' && (Math.abs(this.controlOffsetX) > 0.1 || Math.abs(this.controlOffsetY) > 0.1)) {
+                // Draw two straight line segments through the control point
+                ctx.lineTo(rotatedControlX, rotatedControlY);
+                ctx.lineTo(visualLength / 2, 0);
             } else {
-                // Draw straight line
+                // Draw single straight line
                 ctx.lineTo(visualLength / 2, 0);
             }
             ctx.stroke();
@@ -656,12 +717,21 @@ export class Arrow extends Line {
             if (this.arrowHead === 'none') return; // Only draw if arrow heads are enabled
             ctx.save();
             ctx.translate(x, 0);
-            // Calculate tangent angle at the endpoint for curved arrows
+
+            // Calculate tangent angle at the endpoint
             if (isCurved) {
+                // For curved arrows, use bezier curve tangent
                 const t = direction === 1 ? 1 : 0;
                 const tangent = getTangent(t);
                 const tangentAngle = Math.atan2(tangent.y, tangent.x);
                 ctx.rotate(tangentAngle);
+            } else if (this.anchorStyle === 'straight' && (Math.abs(this.controlOffsetX) > 0.1 || Math.abs(this.controlOffsetY) > 0.1)) {
+                // For straight arrows with control point, calculate angle from control point to endpoint
+                const endX = direction === 1 ? visualLength / 2 : -visualLength / 2;
+                const dx = endX - rotatedControlX;
+                const dy = 0 - rotatedControlY;
+                const angle = Math.atan2(dy, dx);
+                ctx.rotate(angle);
             }
             const isHollow = this.headStyle.endsWith('-hollow');
             const style = isHollow ? this.headStyle.replace('-hollow', '') : this.headStyle;
@@ -710,7 +780,7 @@ export class Arrow extends Line {
      * This is used by Fabric for internal calculations
      */
     _getNonTransformedDimensions(): Point {
-        const isCurved = Math.abs(this.controlOffsetX) > 0.1 || Math.abs(this.controlOffsetY) > 0.1;
+        const isCurved = this.anchorStyle === 'curved' && (Math.abs(this.controlOffsetX) > 0.1 || Math.abs(this.controlOffsetY) > 0.1);
 
         if (!isCurved) {
             return super._getNonTransformedDimensions();
@@ -752,7 +822,7 @@ export class Arrow extends Line {
      * Override getCoords to return corner points that include the curve
      */
     getCoords(): Point[] {
-        const isCurved = Math.abs(this.controlOffsetX) > 0.1 || Math.abs(this.controlOffsetY) > 0.1;
+        const isCurved = this.anchorStyle === 'curved' && (Math.abs(this.controlOffsetX) > 0.1 || Math.abs(this.controlOffsetY) > 0.1);
 
         if (!isCurved) {
             return super.getCoords();
@@ -807,7 +877,7 @@ export class Arrow extends Line {
      * This ensures the bounding box encompasses the entire curve
      */
     getBoundingRect(): any {
-        const isCurved = Math.abs(this.controlOffsetX) > 0.1 || Math.abs(this.controlOffsetY) > 0.1;
+        const isCurved = this.anchorStyle === 'curved' && (Math.abs(this.controlOffsetX) > 0.1 || Math.abs(this.controlOffsetY) > 0.1);
 
         if (!isCurved) {
             return super.getBoundingRect();
@@ -872,14 +942,15 @@ export class Arrow extends Line {
      */
     containsPoint(point: Point): boolean {
         // Check if the arrow is curved
-        const isCurved = Math.abs(this.controlOffsetX) > 0.1 || Math.abs(this.controlOffsetY) > 0.1;
+        const isCurved = this.anchorStyle === 'curved' && (Math.abs(this.controlOffsetX) > 0.1 || Math.abs(this.controlOffsetY) > 0.1);
+        const hasStraightControlPoint = this.anchorStyle === 'straight' && (Math.abs(this.controlOffsetX) > 0.1 || Math.abs(this.controlOffsetY) > 0.1);
 
-        if (!isCurved) {
-            // For straight arrows, use default line hit detection
+        if (!isCurved && !hasStraightControlPoint) {
+            // For straight arrows without control point, use default line hit detection
             return super.containsPoint(point);
         }
 
-        // For curved arrows, check distance to bezier curve
+        // For curved arrows or straight arrows with control point, check distance
         const visualStrokeWidth = this.getVisualStrokeWidth();
         const threshold = Math.max(visualStrokeWidth / 2 + 15, 20); // Increased hit area threshold
 
@@ -897,6 +968,44 @@ export class Arrow extends Line {
         // Control point is at center + controlOffset
         const p1x = centerX + this.controlOffsetX;
         const p1y = centerY + this.controlOffsetY;
+
+        if (hasStraightControlPoint) {
+            // For straight arrows with control point, check distance to two line segments
+            // Helper function to calculate distance from point to line segment
+            const distanceToSegment = (px: number, py: number, x1: number, y1: number, x2: number, y2: number) => {
+                const dx = x2 - x1;
+                const dy = y2 - y1;
+                const lengthSquared = dx * dx + dy * dy;
+
+                if (lengthSquared === 0) {
+                    // Degenerate segment (point)
+                    const dpx = px - x1;
+                    const dpy = py - y1;
+                    return Math.sqrt(dpx * dpx + dpy * dpy);
+                }
+
+                // Calculate projection parameter t
+                let t = ((px - x1) * dx + (py - y1) * dy) / lengthSquared;
+                t = Math.max(0, Math.min(1, t)); // Clamp to [0, 1]
+
+                // Calculate closest point on segment
+                const closestX = x1 + t * dx;
+                const closestY = y1 + t * dy;
+
+                // Calculate distance
+                const distX = px - closestX;
+                const distY = py - closestY;
+                return Math.sqrt(distX * distX + distY * distY);
+            };
+
+            // Check distance to first segment (start to control point)
+            const dist1 = distanceToSegment(localPoint.x, localPoint.y, this.x1, this.y1, p1x, p1y);
+            // Check distance to second segment (control point to end)
+            const dist2 = distanceToSegment(localPoint.x, localPoint.y, p1x, p1y, this.x2, this.y2);
+
+            const minDistance = Math.min(dist1, dist2);
+            return minDistance <= threshold;
+        }
 
         // Sample points along the quadratic bezier curve
         const samples = 50; // Increased samples for better accuracy
@@ -929,7 +1038,7 @@ export class Arrow extends Line {
      * Override toObject to include custom properties
      */
     toObject(propertiesToInclude: any[] = []): any {
-        return super.toObject(['arrowHead', 'headStyle', 'lineStyle', 'thicknessStyle', 'useCustomSelection', 'controlOffsetX', 'controlOffsetY', ...propertiesToInclude] as any);
+        return super.toObject(['arrowHead', 'headStyle', 'lineStyle', 'thicknessStyle', 'anchorStyle', 'useCustomSelection', 'controlOffsetX', 'controlOffsetY', ...propertiesToInclude] as any);
     }
 }
 classRegistry.setClass(Arrow);

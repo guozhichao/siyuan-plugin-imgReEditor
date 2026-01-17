@@ -415,6 +415,17 @@
                 <option value="varying">变化</option>
             </select>
         </div>
+        <div class="row">
+            <label for="arrow-anchor-style">中间锚点</label>
+            <select
+                id="arrow-anchor-style"
+                value={settings.anchorStyle || 'curved'}
+                on:change={e => emitChange({ anchorStyle: getValue(e) })}
+            >
+                <option value="straight">直线段</option>
+                <option value="curved">弯曲</option>
+            </select>
+        </div>
     {:else if tool === 'text'}
         <div class="row">
             <label for="font-family">字体</label>
