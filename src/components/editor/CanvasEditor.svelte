@@ -1428,19 +1428,35 @@
                     dispatch('selection', { options: null, type: null });
                     return;
                 }
+
+                if (active.type === 'activeSelection') {
+                    dispatch('selection', {
+                        options: {
+                            isSelection: false,
+                            isMixedSelection: true, // Treat all multi-selection as mixed for simplicity in UI
+                            selectionType: null,
+                        },
+                        type: 'activeSelection',
+                    });
+                    return;
+                }
+
+                let targetType = active.type;
+                let representativeObject = active;
+
                 const allowedShapeTypes = ['rect', 'ellipse', 'circle'];
-                if (allowedShapeTypes.includes(active.type) || active.type === 'path') {
+                if (allowedShapeTypes.includes(targetType) || targetType === 'path') {
                     // derive fillOpacity from fill if possible
                     let fp = 1;
                     try {
-                        const f = active.fill;
+                        const f = representativeObject.fill;
                         if (typeof f === 'string') {
                             const m = f.match(/rgba\([^,]+,[^,]+,[^,]+,([^)]+)\)/);
                             if (m && m[1]) fp = parseFloat(m[1]) || 1;
                             else fp = 1;
                         }
                     } catch (e) {}
-                    let fillVal = active.fill;
+                    let fillVal = representativeObject.fill;
                     if (typeof fillVal === 'string' && fillVal.startsWith('rgba')) {
                         try {
                             fillVal = '#' + new Color(fillVal).toHex();
@@ -1448,39 +1464,44 @@
                     }
                     dispatch('selection', {
                         options: {
-                            stroke: active.stroke,
-                            strokeWidth: active.strokeWidth,
+                            stroke: representativeObject.stroke,
+                            strokeWidth: representativeObject.strokeWidth,
                             fill: fillVal,
                             fillOpacity: fp,
+                            isSelection: true,
+                            selectionType: targetType,
                         },
-                        type: active.type,
+                        type: targetType,
                     });
                 } else if (
-                    active.type === 'arrow' ||
-                    (active.type === 'line' && (active as any).arrowHead)
+                    targetType === 'arrow' ||
+                    (targetType === 'line' && (representativeObject as any).arrowHead)
                 ) {
                     // Custom Arrow class (extends Line with arrowHead property)
                     dispatch('selection', {
                         options: {
-                            stroke: active.stroke,
+                            stroke: representativeObject.stroke,
                             strokeWidth: Math.round(
-                                typeof (active as any).getVisualStrokeWidth === 'function'
-                                    ? (active as any).getVisualStrokeWidth()
-                                    : active.strokeWidth || 0
+                                typeof (representativeObject as any).getVisualStrokeWidth ===
+                                    'function'
+                                    ? (representativeObject as any).getVisualStrokeWidth()
+                                    : representativeObject.strokeWidth || 0
                             ),
-                            arrowHead: (active as any).arrowHead,
-                            headStyle: (active as any).headStyle,
-                            anchorStyle: (active as any).anchorStyle,
-                            lineStyle: (active as any).lineStyle,
-                            thicknessStyle: (active as any).thicknessStyle,
+                            arrowHead: (representativeObject as any).arrowHead,
+                            headStyle: (representativeObject as any).headStyle,
+                            anchorStyle: (representativeObject as any).anchorStyle,
+                            lineStyle: (representativeObject as any).lineStyle,
+                            thicknessStyle: (representativeObject as any).thicknessStyle,
+                            isSelection: true,
+                            selectionType: 'arrow',
                         },
                         type: 'arrow',
                     });
-                } else if (active.type === 'group') {
+                } else if (targetType === 'group') {
                     // detect arrow groups (legacy) and forward their style as selection options
                     try {
-                        const parts = (active as any).getObjects
-                            ? (active as any).getObjects()
+                        const parts = (representativeObject as any).getObjects
+                            ? (representativeObject as any).getObjects()
                             : [];
                         const line = parts.find((p: any) => p.type === 'line');
                         const triangleParts = parts.filter((p: any) => p.type === 'triangle');
@@ -1502,15 +1523,24 @@
                                     stroke: line.stroke,
                                     strokeWidth: line.strokeWidth,
                                     arrowHead,
+                                    isSelection: true,
+                                    selectionType: 'arrow',
                                 },
                                 type: 'arrow',
                             });
                             return;
                         }
                     } catch (e) {}
-                    dispatch('selection', { options: null, type: active.type });
-                } else if (['i-text', 'textbox', 'text'].includes(active.type)) {
-                    let fillVal = active.fill;
+                    dispatch('selection', {
+                        options: {
+                            isSelection: false,
+                            isMixedSelection: true,
+                            selectionType: null,
+                        },
+                        type: 'group',
+                    });
+                } else if (['i-text', 'textbox', 'text'].includes(targetType)) {
+                    let fillVal = representativeObject.fill;
                     if (typeof fillVal === 'string' && fillVal.startsWith('rgba')) {
                         try {
                             fillVal = '#' + new Color(fillVal).toHex();
@@ -1518,18 +1548,23 @@
                     }
                     dispatch('selection', {
                         options: {
-                            family: (active as any).fontFamily,
-                            size: Math.round((active as any).fontSize * (active.scaleX || 1)),
+                            family: (representativeObject as any).fontFamily,
+                            size: Math.round(
+                                (representativeObject as any).fontSize *
+                                    (representativeObject.scaleX || 1)
+                            ),
                             fill: fillVal,
-                            stroke: active.stroke,
-                            strokeWidth: active.strokeWidth,
-                            bold: (active as any).fontWeight === 'bold',
-                            italic: (active as any).fontStyle === 'italic',
+                            stroke: representativeObject.stroke,
+                            strokeWidth: representativeObject.strokeWidth,
+                            bold: (representativeObject as any).fontWeight === 'bold',
+                            italic: (representativeObject as any).fontStyle === 'italic',
+                            isSelection: true,
+                            selectionType: 'text',
                         },
-                        type: active.type,
+                        type: targetType,
                     });
-                } else if (active.type === 'number-marker') {
-                    let fillVal = active.fill;
+                } else if (targetType === 'number-marker') {
+                    let fillVal = representativeObject.fill;
                     if (typeof fillVal === 'string') {
                         try {
                             fillVal = '#' + new Color(fillVal).toHex();
@@ -1538,29 +1573,39 @@
                     dispatch('selection', {
                         options: {
                             fill: fillVal,
-                            count: (active as any).count,
-                            fontSize: (active as any).fontSize,
+                            count: (representativeObject as any).count,
+                            fontSize: (representativeObject as any).fontSize,
                             nextNumber: currentNumber,
                             isSelection: true,
+                            selectionType: 'number-marker',
                         },
                         type: 'number-marker',
                     });
-                } else if (active.type === 'mosaic-rect') {
+                } else if (targetType === 'mosaic-rect') {
                     dispatch('selection', {
                         options: {
-                            blockSize: (active as any).blockSize || 15,
+                            blockSize: (representativeObject as any).blockSize || 15,
+                            isSelection: true,
+                            selectionType: 'mosaic',
                         },
                         type: 'mosaic-rect',
                     });
-                } else if (active.type === 'image') {
+                } else if (targetType === 'image') {
                     dispatch('selection', {
                         options: {
-                            width: Math.round(active.getScaledWidth()),
-                            height: Math.round(active.getScaledHeight()),
-                            lockAspectRatio: (active as any).lockUniScaling !== false,
+                            width: Math.round(representativeObject.getScaledWidth()),
+                            height: Math.round(representativeObject.getScaledHeight()),
+                            lockAspectRatio: (representativeObject as any).lockUniScaling !== false,
                             isSelection: true,
+                            selectionType: 'image',
                         },
                         type: 'image',
+                    });
+                } else {
+                    dispatch('selection', {
+                        // For unknown types or unhandled activeSelection/groups, do NOT enable selection settings
+                        options: { isSelection: false, selectionType: null },
+                        type: targetType,
                     });
                 }
             } catch (e) {}

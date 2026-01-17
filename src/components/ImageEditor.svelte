@@ -1500,6 +1500,39 @@
                                     } else if (action === 'enterImageCropMode') {
                                         canvasEditorRef.enterImageCropMode &&
                                             canvasEditorRef.enterImageCropMode();
+                                    } else if (action === 'activateSelectionTool') {
+                                        const type = e.detail.type;
+                                        let toolToActivate = type;
+                                        let shapeType = null;
+
+                                        if (
+                                            type === 'rect' ||
+                                            type === 'circle' ||
+                                            type === 'ellipse'
+                                        ) {
+                                            toolToActivate = 'shape';
+                                            shapeType =
+                                                type === 'ellipse' || type === 'circle'
+                                                    ? 'circle'
+                                                    : 'rect';
+                                        } else if (
+                                            type === 'i-text' ||
+                                            type === 'textbox' ||
+                                            type === 'text'
+                                        ) {
+                                            toolToActivate = 'text';
+                                        } else if (type === 'mosaic-rect') {
+                                            toolToActivate = 'mosaic';
+                                        } else if (type === 'path') {
+                                            toolToActivate = 'brush';
+                                        }
+
+                                        handleToolChange({
+                                            detail: {
+                                                tool: toolToActivate,
+                                                shape: shapeType,
+                                            },
+                                        });
                                     }
                                 } catch (err) {
                                     console.warn('Action failed', err);

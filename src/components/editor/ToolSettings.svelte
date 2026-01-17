@@ -1311,6 +1311,75 @@
                 </svg>
             </button>
         </div>
+    {:else if tool === 'select'}
+        {#if settings.isSelection === true && settings.selectionType && settings.selectionType !== 'activeSelection'}
+            <div class="row" style="margin-bottom: 12px;">
+                <button
+                    class="b3-button b3-button--outline"
+                    on:click={() =>
+                        dispatch('action', {
+                            action: 'activateSelectionTool',
+                            type: settings.selectionType,
+                        })}
+                    style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 8px;"
+                >
+                    <svg
+                        class="icon"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        style="width: 14px; height: 14px;"
+                    >
+                        <path d="M12 5v14M5 12h14" />
+                    </svg>
+                    激活 {isChinese(settings.selectionType)
+                        ? settings.selectionType
+                        : (type => {
+                              const map = {
+                                  rect: '矩形',
+                                  circle: '圆形',
+                                  ellipse: '椭圆',
+                                  arrow: '箭头',
+                                  text: '文本',
+                                  'i-text': '文本',
+                                  textbox: '文本',
+                                  'number-marker': '序号',
+                                  mosaic: '马赛克',
+                                  'mosaic-rect': '马赛克',
+                                  path: '画笔',
+                                  image: '图片',
+                                  group: '组合',
+                              };
+                              return map[type] || type;
+                          })(settings.selectionType)} 设置
+                </button>
+            </div>
+            <div class="empty" style="font-size: 12px; opacity: 0.8;">
+                已选中 {(type => {
+                    const map = {
+                        rect: '矩形',
+                        circle: '圆形',
+                        ellipse: '椭圆',
+                        arrow: '箭头',
+                        text: '文本',
+                        'i-text': '文本',
+                        textbox: '文本',
+                        'number-marker': '序号',
+                        mosaic: '马赛克',
+                        'mosaic-rect': '马赛克',
+                        path: '画笔',
+                        image: '图片',
+                        group: '组合',
+                    };
+                    return map[type] || type;
+                })(settings.selectionType)}，点击上方按钮进行修改
+            </div>
+        {:else if settings.isMixedSelection === true || settings.selectionType === 'activeSelection'}
+            <div class="empty">选择了多种类型的对象，无法批量修改设置</div>
+        {:else}
+            <div class="empty">请选择一个形状以激活设置</div>
+        {/if}
     {:else}
         <div class="empty">暂无设置</div>
     {/if}
