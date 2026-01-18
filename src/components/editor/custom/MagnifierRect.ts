@@ -63,12 +63,6 @@ export class MagnifierRect extends Rect {
         const w = this.width || 0;
         const h = this.height || 0;
 
-        if (!fabricCanvas.backgroundImage) {
-            this._drawPlaceholder(ctx, w, h);
-            this._drawBorder(ctx, w, h);
-            return;
-        }
-
         this._drawMagnifiedEffect(ctx, w, h, fabricCanvas);
         this._drawBorder(ctx, w, h);
     }
@@ -109,65 +103,18 @@ export class MagnifierRect extends Rect {
     }
 
     private _drawMagnifiedEffect(ctx: CanvasRenderingContext2D, width: number, height: number, fabricCanvas: Canvas): void {
-        const bgImage = fabricCanvas.backgroundImage as any;
-        if (!bgImage) return;
-
         const magnification = Math.max(1, this.magnification);
-        const bgElement = bgImage.getElement();
-        if (!bgElement) {
-            this._drawPlaceholder(ctx, width, height);
-            return;
-        }
 
-        const boundingRect = bgImage.getBoundingRect();
-        const tempWidth = Math.ceil(boundingRect.width);
-        const tempHeight = Math.ceil(boundingRect.height);
-
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = tempWidth;
-        tempCanvas.height = tempHeight;
-        const tempCtx = tempCanvas.getContext('2d');
-        if (!tempCtx) {
-            this._drawPlaceholder(ctx, width, height);
-            return;
-        }
-
-        // Render background to temp canvas
-        tempCtx.save();
-        tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
-        tempCtx.translate(-boundingRect.left, -boundingRect.top);
-
-        tempCtx.translate(bgImage.left || 0, bgImage.top || 0);
-        tempCtx.rotate((bgImage.angle || 0) * Math.PI / 180);
-        tempCtx.scale(bgImage.scaleX || 1, bgImage.scaleY || 1);
-        if (bgImage.flipX) {
-            tempCtx.scale(-1, 1);
-            tempCtx.translate(-bgImage.width, 0);
-        }
-        if (bgImage.flipY) {
-            tempCtx.scale(1, -1);
-            tempCtx.translate(0, -bgImage.height);
-        }
-        if (bgImage.originX === 'center') tempCtx.translate(-bgImage.width / 2, 0);
-        if (bgImage.originY === 'center') tempCtx.translate(0, -bgImage.height / 2);
-
-        tempCtx.drawImage(bgElement, 0, 0);
-        tempCtx.restore();
-
-        // Determine Source Area
+        // 1. Calculate Source Center (center of the area we want to view)
         let sourceCenter = { x: 0, y: 0 };
-        // Default to self if no sourceId found
         let foundSource = false;
-
         let sourceObj: any = null;
 
         if (this.sourceId) {
-            // Find the source object
             const objects = fabricCanvas.getObjects();
             sourceObj = objects.find((o: any) => o.id === this.sourceId);
 
             if (sourceObj) {
-                // Calculate center of source object
                 const m = sourceObj.calcTransformMatrix();
                 sourceCenter = util.transformPoint({ x: 0, y: 0 } as any, m);
                 foundSource = true;
@@ -175,32 +122,63 @@ export class MagnifierRect extends Rect {
         }
 
         if (!foundSource) {
-            // Fallback to self
             const matrix = this.calcTransformMatrix();
             sourceCenter = util.transformPoint({ x: 0, y: 0 } as any, matrix);
         }
 
-        // Convert global center to temp canvas coordinates
-        const tempCenterX = sourceCenter.x - boundingRect.left;
-        const tempCenterY = sourceCenter.y - boundingRect.top;
-
-        // Source dimensions
-        let srcW, srcH;
-        if (foundSource && sourceObj) {
-            // Use actual source object dimensions
-            srcW = sourceObj.getScaledWidth();
-            srcH = sourceObj.getScaledHeight();
-        } else {
-            // Fallback: calculate from view dimensions and magnification
-            srcW = width / magnification;
-            srcH = height / magnification;
+        // 2. Setup High-Res Temp Canvas
+        // Use retina scaling to ensure crisp rendering on high DPI screens
+        const pixelRatio = (fabricCanvas as any).getRetinaScaling ? (fabricCanvas as any).getRetinaScaling() : 1;
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = width * pixelRatio;
+        tempCanvas.height = height * pixelRatio;
+        const tempCtx = tempCanvas.getContext('2d');
+        if (!tempCtx) {
+            this._drawPlaceholder(ctx, width, height);
+            return;
         }
 
-        const srcX = tempCenterX - srcW / 2;
-        const srcY = tempCenterY - srcH / 2;
+        // 3. Render Scene to Temp Canvas with Transform
+        tempCtx.save();
 
-        // Since width/height are already corrected in _render, 
-        // they now perfectly match the source aspect ratio * magnification.
+        // Apply coordinate system transformations:
+        // 1. Scale for pixel ratio (physical pixels)
+        tempCtx.scale(pixelRatio, pixelRatio);
+        // 2. Center the "camera" in the temp canvas
+        tempCtx.translate(width / 2, height / 2);
+        // 3. Apply magnification zoom
+        tempCtx.scale(magnification, magnification);
+        // 4. Move "world" so that sourceCenter is at (0,0)
+        tempCtx.translate(-sourceCenter.x, -sourceCenter.y);
+
+        // Render Background Image
+        const bgImage = fabricCanvas.backgroundImage as any;
+        if (bgImage && bgImage.render) {
+            bgImage.render(tempCtx);
+        }
+
+        // Render Objects
+        const objects = fabricCanvas.getObjects();
+        objects.forEach((obj: any) => {
+            // Exclude self and magnifier parts
+            if (obj === this) return;
+            if (obj.type === 'magnifier-rect' ||
+                obj.type === 'magnifier-source-rect' ||
+                obj.type === 'magnifier-connection-line' ||
+                obj.type === 'crop-rect' ||
+                (obj as any)._isCropRect) {
+                return;
+            }
+            if (!obj.visible) return;
+
+            // Render object to tempCtx
+            // Object's own coordinates/transform will combine with our context transform
+            obj.render(tempCtx);
+        });
+
+        tempCtx.restore();
+
+        // 4. Draw temp canvas to main context
         ctx.save();
         ctx.beginPath();
         if (this.magnifierShape === 'circle') {
@@ -210,14 +188,13 @@ export class MagnifierRect extends Rect {
         }
         ctx.clip();
 
-        // The content should perfectly fill the width/height
-        const destX = -width / 2;
-        const destY = -height / 2;
-
+        // Draw the temp canvas
+        // tempCanvas represents the full view port (width x height) in logic pixels
+        // but has physical size (width*ratio x height*ratio)
+        // drawImage will stick it into the rect [-w/2, -h/2, w, h]
         ctx.drawImage(
             tempCanvas,
-            srcX, srcY, srcW, srcH,
-            destX, destY, width, height
+            -width / 2, -height / 2, width, height
         );
 
         ctx.restore();

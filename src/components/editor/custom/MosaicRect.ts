@@ -38,8 +38,7 @@ export class MosaicRect extends Rect {
 
         // Get the canvas to sample from
         const fabricCanvas = this.canvas as Canvas;
-        if (!fabricCanvas || !fabricCanvas.backgroundImage) {
-            // If no background, draw gray blocks
+        if (!fabricCanvas) {
             this._drawGrayMosaic(ctx, w, h);
             return;
         }
@@ -70,26 +69,43 @@ export class MosaicRect extends Rect {
     }
 
     /**
-     * Draw mosaic effect by sampling from background image
+     * Draw mosaic effect by sampling from background image and other objects
      */
     private _drawMosaicEffect(ctx: CanvasRenderingContext2D, width: number, height: number, fabricCanvas: Canvas): void {
-        const bgImage = fabricCanvas.backgroundImage as any;
-        if (!bgImage) return;
-
         const blockSize = this.blockSize;
         if (blockSize <= 0) return;
 
-        // Create a temporary canvas to sample from
-        const bgElement = bgImage.getElement();
-        if (!bgElement) {
+        const bgImage = fabricCanvas.backgroundImage as any;
+        const canvasBg = fabricCanvas.getObjects().find((o: any) => (o as any)._isCanvasBackground);
+
+        // Determine reference bounds
+        let boundingRect: any = null;
+        if (bgImage) {
+            boundingRect = bgImage.getBoundingRect();
+        } else if (canvasBg) {
+            boundingRect = canvasBg.getBoundingRect();
+        } else {
+            // Fallback to canvas dimensions
+            boundingRect = {
+                left: 0,
+                top: 0,
+                width: fabricCanvas.getWidth(),
+                height: fabricCanvas.getHeight()
+            };
+        }
+
+        if (!boundingRect) {
             this._drawGrayMosaic(ctx, width, height);
             return;
         }
 
-        // Get bounding rect to determine temp canvas size
-        const boundingRect = bgImage.getBoundingRect();
         const tempWidth = Math.ceil(boundingRect.width);
         const tempHeight = Math.ceil(boundingRect.height);
+
+        if (tempWidth <= 0 || tempHeight <= 0) {
+            this._drawGrayMosaic(ctx, width, height);
+            return;
+        }
 
         const tempCanvas = document.createElement('canvas');
         tempCanvas.width = tempWidth;
@@ -100,29 +116,56 @@ export class MosaicRect extends Rect {
             return;
         }
 
-        // Draw the background image to temp canvas with transformations
+        // Render scene to temp canvas (Composite)
         tempCtx.save();
         tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
 
-        // Translate to align bounding rect to 0,0
+        // Translate so that boundingRect top-left is at 0,0
         tempCtx.translate(-boundingRect.left, -boundingRect.top);
 
-        // Apply background image transformations in correct order
-        tempCtx.translate(bgImage.left || 0, bgImage.top || 0);
-        tempCtx.rotate((bgImage.angle || 0) * Math.PI / 180);
-        tempCtx.scale(bgImage.scaleX || 1, bgImage.scaleY || 1);
-        if (bgImage.flipX) {
-            tempCtx.scale(-1, 1);
-            tempCtx.translate(-bgImage.width, 0);
-        }
-        if (bgImage.flipY) {
-            tempCtx.scale(1, -1);
-            tempCtx.translate(0, -bgImage.height);
-        }
-        if (bgImage.originX === 'center') tempCtx.translate(-bgImage.width / 2, 0);
-        if (bgImage.originY === 'center') tempCtx.translate(0, -bgImage.height / 2);
+        // 1. Draw Background Image if exists
+        if (bgImage) {
+            const bgElement = bgImage.getElement();
+            if (bgElement) {
+                tempCtx.save();
+                tempCtx.translate(bgImage.left || 0, bgImage.top || 0);
+                tempCtx.rotate((bgImage.angle || 0) * Math.PI / 180);
+                tempCtx.scale(bgImage.scaleX || 1, bgImage.scaleY || 1);
+                if (bgImage.flipX) {
+                    tempCtx.scale(-1, 1);
+                    tempCtx.translate(-bgImage.width, 0);
+                }
+                if (bgImage.flipY) {
+                    tempCtx.scale(1, -1);
+                    tempCtx.translate(0, -bgImage.height);
+                }
+                if (bgImage.originX === 'center') tempCtx.translate(-bgImage.width / 2, 0);
+                if (bgImage.originY === 'center') tempCtx.translate(0, -bgImage.height / 2);
 
-        tempCtx.drawImage(bgElement, 0, 0);
+                tempCtx.drawImage(bgElement, 0, 0);
+                tempCtx.restore();
+            }
+        }
+
+        // 2. Draw other visible objects
+        const objects = fabricCanvas.getObjects();
+        objects.forEach((obj: any) => {
+            // Exclude self
+            if (obj === this) return;
+            // Exclude tools that shouldn't be part of the image
+            if (obj.type === 'crop-rect' ||
+                obj.type === 'magnifier-rect' ||
+                obj.type === 'magnifier-source-rect' ||
+                obj.type === 'magnifier-connection-line' ||
+                obj.type === 'mosaic-rect' || // exclude other mosaics to prevent recursive weirdness
+                (obj as any)._isCropRect) {
+                return;
+            }
+            if (!obj.visible) return;
+
+            obj.render(tempCtx);
+        });
+
         tempCtx.restore();
 
         // Get all image data at once for performance
@@ -132,9 +175,9 @@ export class MosaicRect extends Rect {
         // Get transform matrix to convert local object coordinates to global canvas coordinates
         const matrix = this.calcTransformMatrix();
 
-        // Background origin for grid alignment
-        const bgOriginX = bgImage.left || 0;
-        const bgOriginY = bgImage.top || 0;
+        // Grid alignment origin
+        const bgOriginX = bgImage ? (bgImage.left || 0) : 0;
+        const bgOriginY = bgImage ? (bgImage.top || 0) : 0;
         const scaleX = Math.abs(this.scaleX || 1);
         const scaleY = Math.abs(this.scaleY || 1);
 
@@ -151,8 +194,7 @@ export class MosaicRect extends Rect {
                 // Convert local coordinates to global canvas coordinates
                 const point = util.transformPoint({ x: localX, y: localY } as any, matrix);
 
-                // Snap global point to a grid aligned with the background image
-                // Use the visual block size (local blockSize * scale) for snapping to keep it consistent on screen
+                // Snap global point to a grid aligned with the background/origin
                 const gridStepX = blockSize * scaleX;
                 const gridStepY = blockSize * scaleY;
 

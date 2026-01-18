@@ -148,35 +148,33 @@
             />
         </svg>
     </button>
-    {#if !isCanvasMode}
-        <button
-            class="b3-button"
-            class:active={active === 'mosaic'}
-            class:b3-button--outline={active !== 'mosaic'}
-            on:click={() => emit('tool', { tool: 'mosaic' })}
-            title="马赛克"
-        >
-            <svg class="fill-icon" viewBox="0 0 1024 1024">
-                <path
-                    d="M853.323294 712.794353h-140.528941v140.528941h140.528941zM572.235294 712.794353h-140.559059v140.528941H572.235294zM291.147294 712.794353H150.588235v140.528941h140.559059zM853.323294 431.676235h-140.528941V572.235294h140.528941zM572.235294 431.676235h-140.559059V572.235294H572.235294zM291.147294 431.676235H150.588235V572.235294h140.559059zM853.323294 150.588235h-140.528941v140.559059h140.528941zM572.235294 150.588235h-140.559059v140.559059H572.235294zM291.147294 150.588235H150.588235v140.559059h140.559059zM431.676235 291.147294H291.147294v140.528941h140.528941zM431.676235 572.235294H291.147294v140.559059h140.528941zM712.794353 291.147294H572.235294v140.528941h140.559059zM712.794353 572.235294H572.235294v140.559059h140.559059z"
-                ></path>
-            </svg>
-        </button>
-    {/if}
-        <button
-            class="b3-button"
-            class:active={active === 'magnifier'}
-            class:b3-button--outline={active !== 'magnifier'}
-            on:click={() => emit('tool', { tool: 'magnifier' })}
-            title="放大镜"
-        >
-            <svg class="icon" viewBox="0 0 24 24">
-                <circle cx="11" cy="11" r="8"></circle>
-                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                <line x1="11" y1="8" x2="11" y2="14"></line>
-                <line x1="8" y1="11" x2="14" y2="11"></line>
-            </svg>
-        </button>
+    <button
+        class="b3-button"
+        class:active={active === 'mosaic'}
+        class:b3-button--outline={active !== 'mosaic'}
+        on:click={() => emit('tool', { tool: 'mosaic' })}
+        title="马赛克"
+    >
+        <svg class="fill-icon" viewBox="0 0 1024 1024">
+            <path
+                d="M853.323294 712.794353h-140.528941v140.528941h140.528941zM572.235294 712.794353h-140.559059v140.528941H572.235294zM291.147294 712.794353H150.588235v140.528941h140.559059zM853.323294 431.676235h-140.528941V572.235294h140.528941zM572.235294 431.676235h-140.559059V572.235294H572.235294zM291.147294 431.676235H150.588235V572.235294h140.559059zM853.323294 150.588235h-140.528941v140.559059h140.528941zM572.235294 150.588235h-140.559059v140.559059H572.235294zM291.147294 150.588235H150.588235v140.559059h140.559059zM431.676235 291.147294H291.147294v140.528941h140.528941zM431.676235 572.235294H291.147294v140.559059h140.528941zM712.794353 291.147294H572.235294v140.528941h140.559059zM712.794353 572.235294H572.235294v140.559059h140.559059z"
+            ></path>
+        </svg>
+    </button>
+    <button
+        class="b3-button"
+        class:active={active === 'magnifier'}
+        class:b3-button--outline={active !== 'magnifier'}
+        on:click={() => emit('tool', { tool: 'magnifier' })}
+        title="放大镜"
+    >
+        <svg class="icon" viewBox="0 0 24 24">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            <line x1="11" y1="8" x2="11" y2="14"></line>
+            <line x1="8" y1="11" x2="14" y2="11"></line>
+        </svg>
+    </button>
     {#if !isCanvasMode}
         <button
             class="b3-button"
