@@ -1893,6 +1893,36 @@
                         type: target.type,
                     });
                 }
+            } else if (target && target.type === 'magnifier-rect') {
+                // Update magnification in real-time when resizing
+                const scaleX = target.scaleX || 1;
+                const currentWidth = target.width * scaleX;
+
+                if ((target as any).sourceId) {
+                    const sourceObj = canvas
+                        .getObjects()
+                        .find((o: any) => o.id === (target as any).sourceId);
+                    if (sourceObj) {
+                        const sourceWidth = sourceObj.getScaledWidth();
+                        if (sourceWidth > 0) {
+                            let newMag = currentWidth / sourceWidth;
+                            // Limit range to sensible values (matches UI slider 1.5-10)
+                            newMag = Math.max(1, Math.min(10, newMag));
+
+                            (target as any).magnification = newMag;
+
+                            if (activeTool === 'magnifier') {
+                                activeToolOptions.magnification = newMag;
+                                dispatch('selection', {
+                                    options: { ...activeToolOptions, magnification: newMag },
+                                    type: target.type,
+                                });
+                            }
+                            // Force update connection line during scaling
+                            updateMagnifierConnectionLine(target);
+                        }
+                    }
+                }
             }
         });
         // Enforce fixed crop ratio when resizing crop rect via controls
@@ -4536,6 +4566,9 @@
                                         });
                                         o.setPositionByOrigin(center, 'center', 'center');
                                         o.setCoords();
+
+                                        // Update connection line when size changes due to magnification
+                                        updateMagnifierConnectionLine(o);
                                     } catch (e) {
                                         console.warn('Failed to sync view rect', e);
                                     }
