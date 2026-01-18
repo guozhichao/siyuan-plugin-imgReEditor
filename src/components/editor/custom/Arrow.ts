@@ -278,7 +278,14 @@ export class Arrow extends Line {
     controlOffsetX: number;
     controlOffsetY: number;
     constructor(points: [number, number, number, number], options?: ArrowOptions) {
-        super(points, options);
+        // @ts-ignore
+        if (options) {
+            // @ts-ignore
+            const { type, ...otherOptions } = options;
+            super(points, otherOptions);
+        } else {
+            super(points, options);
+        }
         this.arrowHead = options?.arrowHead || 'right';
         this.headStyle = options?.headStyle || 'sharp';
         this.lineStyle = options?.lineStyle || 'solid';

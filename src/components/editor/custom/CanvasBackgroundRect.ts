@@ -7,7 +7,12 @@ export default class CanvasBackgroundRect extends Rect {
     static type = 'canvas-background';
     _isCanvasBackground: boolean = true;
     constructor(options?: any) {
-        super(options);
+        if (options) {
+            const { type, ...otherOptions } = options;
+            super(otherOptions);
+        } else {
+            super(options);
+        }
         this._isCanvasBackground = true;
     }
 

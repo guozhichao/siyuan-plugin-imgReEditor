@@ -20,7 +20,13 @@ export class NumberMarker extends FabricObject {
     fontSize: number;
 
     constructor(options?: NumberMarkerOptions) {
-        super(options);
+        if (options) {
+            // @ts-ignore
+            const { type, ...otherOptions } = options;
+            super(otherOptions);
+        } else {
+            super(options);
+        }
 
         this.count = options?.count || 1;
         // Default fill is handled by super if passed in options, usually red from callsite

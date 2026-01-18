@@ -4,7 +4,12 @@ class CropRect extends Rect {
     static type = 'crop-rect';
 
     constructor(options: any) {
-        super(options);
+        if (options) {
+            const { type, ...otherOptions } = options;
+            super(otherOptions);
+        } else {
+            super(options);
+        }
     }
 
     // Method to set custom controls

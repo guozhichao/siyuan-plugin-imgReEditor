@@ -7,7 +7,12 @@ export class MagnifierConnectionLine extends Line {
     sourceId: string | null = null;
 
     constructor(points: [number, number, number, number], options?: any) {
-        super(points, options);
+        if (options) {
+            const { type, ...otherOptions } = options;
+            super(points, otherOptions);
+        } else {
+            super(points, options);
+        }
         this.viewId = options?.viewId || null;
         this.sourceId = options?.sourceId || null;
         this.stroke = options?.stroke || '#00ccff';

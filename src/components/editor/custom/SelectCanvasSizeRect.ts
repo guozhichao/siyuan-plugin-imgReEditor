@@ -6,7 +6,12 @@ class SelectCanvasSizeRect extends Rect {
     // Explicitly set the instance type property to match
     // This ensures obj.type returns 'select-canvas-size-rect' immediately
     constructor(options: any) {
-        super(options);
+        if (options) {
+            const { type, ...otherOptions } = options;
+            super(otherOptions);
+        } else {
+            super(options);
+        }
     }
 
     // Method to set custom controls

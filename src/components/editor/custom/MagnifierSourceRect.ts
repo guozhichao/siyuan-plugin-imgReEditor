@@ -9,7 +9,12 @@ export class MagnifierSourceRect extends Rect {
     magnifierShape: 'rect' | 'circle' = 'rect';
 
     constructor(options?: any) {
-        super(options);
+        if (options) {
+            const { type, ...otherOptions } = options;
+            super(otherOptions);
+        } else {
+            super(options);
+        }
         this.magnifierShape = options?.magnifierShape || 'rect';
         this.viewId = options?.viewId || null;
         this.id = options?.id || null;

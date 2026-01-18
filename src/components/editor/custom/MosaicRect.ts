@@ -8,7 +8,12 @@ export class MosaicRect extends Rect {
     blockSize: number = 15;
     static type = 'mosaic-rect';
     constructor(options?: any) {
-        super(options);
+        if (options) {
+            const { type, ...otherOptions } = options;
+            super(otherOptions);
+        } else {
+            super(options);
+        }
         this.blockSize = options?.blockSize || 15;
         this.fill = 'transparent'; // We'll use a pattern instead
         this.stroke = options?.stroke || 'transparent';
